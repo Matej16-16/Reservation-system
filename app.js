@@ -1,3 +1,20 @@
+// 1. Firebase importy (musia byť úplne navrchu súboru)
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+import { getFirestore, collection, addDoc, getDocs } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+// 2. Tvoja Firebase konfigurácia
+const firebaseConfig = {
+  apiKey: "AIzaSy...",
+  authDomain: "...",
+  projectId: "...",
+  storageBucket: "...",
+  messagingSenderId: "...",
+  appId: "..."
+};
+
+// 3. Inicializácia databázy
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
 // ==========================================================================
 // STATE MANAGEMENT
 // ==========================================================================
