@@ -263,14 +263,6 @@ async function initDashboard() {
     adminToggleBtn.classList.add('hidden');
     document.getElementById('res-user-select-group').classList.add('hidden');
   }
-
-  try {
-    state.fields = await apiRequest('/fields');
-    state.fieldsMap = {};
-    state.fields.forEach(f => {
-      state.fieldsMap[f.id] = f;
-    });
-
     populateFieldsDropdowns();
     renderPitchMap();
     renderMiniPitchMap();
