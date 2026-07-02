@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="sk">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rezervačný systém - Futbalový klub</title>
+  <link rel="stylesheet" href="style.css">
+  <!-- Google Fonts: Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body class="dark-theme">
+  <!-- Toast Notifications Container -->
+  <div id="toast-container" class="toast-container"></div>
+
+  <!-- 1. LOGIN SECTION -->
+  <section id="login-section" class="auth-section">
+    <div class="auth-card">
+      <div class="auth-header">
+        <div class="logo-badge">FK</div>
+        <h1>Rezervačný systém</h1>
+        <p>Prihláste sa pre prístup k rezerváciám ihrísk</p>
+      </div>
+      <form id="login-form" class="auth-form">
+        <div class="form-group">
+          <label for="login-email">Prihlasovacie meno (kategória) alebo E-mail</label>
+          <input type="text" id="login-email" required placeholder="napr. U19 alebo admin@fc.sk">
+        </div>
+        <div class="form-group">
+          <label for="login-password">Heslo</label>
+          <input type="password" id="login-password" required placeholder="••••••••">
+        </div>
+        <button type="submit" class="btn btn-primary btn-block">Prihlásiť sa</button>
+      </form>
+      <div class="auth-footer">
+        <p>Predvolené účty: <br>
+           Admin: <code>admin@fc.sk</code> / <code>admin123</code><br>
+           Tréner: <code>u19@fc.sk</code> / <code>u19pwd</code>
+        </p>
+        <button id="reset-db-btn" class="btn btn-link btn-block mt-4" style="text-align: center; color: var(--danger);">Resetovať lokálnu databázu (Vymazať cache)</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- 2. MAIN DASHBOARD SECTION -->
+  <section id="dashboard-section" class="dashboard-section hidden">
+    <!-- Top Header -->
+    <header class="app-header">
+      <div class="header-left">
+        <div class="logo-badge">FK</div>
+        <div class="header-title-wrapper">
+          <span class="app-subtitle">FUTBALOVÝ KLUB</span>
+          <h1 class="app-title">Rezervácie plôch</h1>
+        </div>
+      </div>
+      <div class="header-right">
+        <div class="user-profile">
+          <div class="user-avatar" id="user-avatar" style="background-color: #64748b;">U</div>
+          <div class="user-details">
+            <span class="user-name" id="user-display-name">Tréner</span>
+            <span class="user-role-badge" id="user-display-role">Coach</span>
+          </div>
+        </div>
+        <button id="admin-toggle-btn" class="btn btn-secondary hidden">Správa používateľov</button>
+        <button id="logout-btn" class="btn btn-danger-outline">Odhlásiť sa</button>
+      </div>
+    </header>
+
+    <div class="dashboard-content">
+      <!-- Left Panel: Interactive Pitch Map & Sidebar filters -->
+      <aside class="left-panel">
+        <div class="panel-card">
+          <div class="card-header">
+            <h3>Nákres a rozdelenie plôch</h3>
+            <p class="card-desc">Vizuálna pomôcka rozloženia plôch</p>
+          </div>
+          
+          <!-- Static Visual Pitch Map -->
+          <div class="pitch-container static-pitch-map">
+            <!-- Training Pitch -->
+            <div class="pitch-card training-pitch" data-field-id="training_full">
+              <div class="pitch-overlay"></div>
+              <div class="pitch-label training-full-label">Tréningové ihrisko (Celé)</div>
+              
+              <div class="training-pitch-split">
+                <!-- Half A -->
+                <div class="pitch-half half-a" data-field-id="training_half_a">
+                  <div class="pitch-overlay"></div>
+                  <div class="pitch-label half-label">Trén. Polovica A</div>
+                  
+                  <div class="quarters-container">
+                    <div class="pitch-quarter quarter-a1" data-field-id="training_quarter_a1">
+                      <div class="pitch-overlay"></div>
+                      <div class="pitch-label quarter-label">Trén. Štvrtina A1</div>
+                    </div>
+                    <div class="pitch-quarter quarter-a2" data-field-id="training_quarter_a2">
+                      <div class="pitch-overlay"></div>
+                      <div class="pitch-label quarter-label">Trén. Štvrtina A2</div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Half B -->
+                <div class="pitch-half half-b" data-field-id="training_half_b">
+                  <div class="pitch-overlay"></div>
+                  <div class="pitch-label half-label">Trén. Polovica B</div>
+                  
+                  <div class="quarters-container">
+                    <div class="pitch-quarter quarter-b1" data-field-id="training_quarter_b1">
+                      <div class="pitch-overlay"></div>
+                      <div class="pitch-label quarter-label">Trén. Štvrtina B1</div>
+                    </div>
+                    <div class="pitch-quarter quarter-b2" data-field-id="training_quarter_b2">
+                      <div class="pitch-overlay"></div>
+                      <div class="pitch-label quarter-label">Trén. Štvrtina B2</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Main Pitch -->
+            <div class="pitch-card main-pitch" data-field-id="main_full">
+              <div class="pitch-overlay"></div>
+              <div class="pitch-label main-full-label">Hlavné ihrisko (Celé)</div>
+              
+              <div class="main-pitch-split">
+                <!-- Half A -->
+                <div class="pitch-half half-a" data-field-id="main_half_a">
+                  <div class="pitch-overlay"></div>
+                  <div class="pitch-label half-label">Polovica A</div>
+                  
+                  <div class="quarters-container">
+                    <div class="pitch-quarter quarter-a1" data-field-id="main_quarter_a1">
+                      <div class="pitch-overlay"></div>
+                      <div class="pitch-label quarter-label">Štvrtina A1</div>
+                    </div>
+                    <div class="pitch-quarter quarter-a2" data-field-id="main_quarter_a2">
+                      <div class="pitch-overlay"></div>
+                      <div class="pitch-label quarter-label">Štvrtina A2</div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Half B -->
+                <div class="pitch-half half-b" data-field-id="main_half_b">
+                  <div class="pitch-overlay"></div>
+                  <div class="pitch-label half-label">Polovica B</div>
+                  
+                  <div class="quarters-container">
+                    <div class="pitch-quarter quarter-b1" data-field-id="main_quarter_b1">
+                      <div class="pitch-overlay"></div>
+                      <div class="pitch-label quarter-label">Štvrtina B1</div>
+                    </div>
+                    <div class="pitch-quarter quarter-b2" data-field-id="main_quarter_b2">
+                      <div class="pitch-overlay"></div>
+                      <div class="pitch-label quarter-label">Štvrtina B2</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="pitch-legend">
+            <div class="legend-item">
+              <span class="legend-color" style="background-color: var(--primary);"></span>
+              <span>U19, U15 atď. farebne odlíšené tímy</span>
+            </div>
+            <div class="legend-item" style="font-size: 0.7rem; line-height: 1.4;">
+              ℹ️ Rezervácia celej polovice obsadí A1+A2 (alebo B1+B2). Rezervácia celého ihriska obsadí všetky štyri štvrtiny.
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Center Panel: Calendar -->
+      <main class="main-panel">
+        <div class="calendar-card">
+          <!-- Calendar Controls -->
+          <div class="calendar-controls">
+            <div class="controls-left">
+              <button id="prev-week-btn" class="btn btn-icon">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+              </button>
+              <h2 id="calendar-week-range" class="week-range-title">24. Jún – 30. Jún 2026</h2>
+              <button id="next-week-btn" class="btn btn-icon">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+              </button>
+              <button id="today-btn" class="btn btn-secondary">Dnes</button>
+
+              <div class="pitch-selector-tabs">
+                <button id="pitch-tab-main" class="tab-btn active" data-pitch="main">Hlavné ihrisko</button>
+                <button id="pitch-tab-training" class="tab-btn" data-pitch="training">Tréningové ihrisko</button>
+              </div>
+            </div>
+            <div class="controls-right">
+              <div class="toggle-group">
+                <button id="view-week-btn" class="btn btn-toggle active">Týždeň</button>
+                <button id="view-day-btn" class="btn btn-toggle">Deň</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="calendar-outer-wrapper">
+            <!-- Scrollable Calendar Area -->
+            <div class="calendar-inner-container">
+              <!-- Grid Header: Days of the week -->
+              <div id="calendar-header-grid" class="calendar-header-grid">
+                <div class="time-column-header"></div>
+                <!-- Generated dynamically -->
+              </div>
+
+              <!-- Grid Body -->
+              <div class="calendar-body-wrapper">
+                <div id="calendar-body-grid" class="calendar-body-grid">
+                  <!-- Time Axis labels and grid cells generated dynamically -->
+                </div>
+                <!-- Floating Reservations Overlay -->
+                <div id="reservations-overlay" class="reservations-overlay">
+                  <!-- Generated dynamically with absolute positioning -->
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <div class="calendar-footer-hint">
+            <p>💡 Tip: Kliknite do prázdneho slotu alebo <strong>potiahnite myšou zhora nadol</strong> pre rýchle vytvorenie rezervácie.</p>
+          </div>
+        </div>
+      </main>
+
+    </div>
+  </section>
+ 
+  <!-- 3. ADMIN SECTION (FULL PAGE VIEW) -->
+  <section id="admin-section" class="admin-section-page hidden">
+    <!-- Top Header -->
+    <header class="app-header">
+      <div class="header-left">
+        <div class="logo-badge">FK</div>
+        <div class="header-title-wrapper">
+          <span class="app-subtitle">FUTBALOVÝ KLUB</span>
+          <h1 class="app-title">Správa používateľov</h1>
+        </div>
+      </div>
+      <div class="header-right">
+        <button id="admin-back-btn" class="btn btn-secondary">← Späť do kalendára</button>
+      </div>
+    </header>
+ 
+    <div class="admin-content-wrapper">
+      <div class="admin-grid">
+        <!-- Create User Form Card -->
+        <div class="panel-card">
+          <div class="panel-card-header">
+            <h3>Nový tréner / kategória</h3>
+            <p class="card-desc">Vytvorte nový profil pre trénera alebo kategóriu</p>
+          </div>
+          <form id="create-user-form" class="admin-form">
+            <div class="form-group">
+              <label for="user-name">Meno / Názov kategórie (Prihlasovacie meno)</label>
+              <input type="text" id="user-name" required placeholder="napr. U17, Tréner Brankárov">
+            </div>
+            <div class="form-group">
+              <label for="user-email">Prihlasovací E-mail (nepovinný)</label>
+              <input type="email" id="user-email" placeholder="u17@fc.sk">
+            </div>
+            <div class="form-group">
+              <label for="user-password">Heslo</label>
+              <input type="password" id="user-password" required placeholder="••••••••">
+            </div>
+            <div class="form-group">
+              <label for="user-role">Rola</label>
+              <select id="user-role" required>
+                <option value="coach" selected>Tréner (Coach)</option>
+                <option value="admin">Administrátor (Admin)</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="user-color">Farba v kalendári</label>
+              <div class="color-picker-wrapper">
+                <input type="color" id="user-color" value="#8b5cf6">
+                <span class="color-picker-label">Zvoľte odtieň</span>
+              </div>
+            </div>
+            <button type="submit" class="btn btn-primary btn-block">Vytvoriť profil</button>
+          </form>
+        </div>
+ 
+        <!-- Users List Card -->
+        <div class="panel-card" style="display: flex; flex-direction: column; height: 100%;">
+          <div class="panel-card-header">
+            <h3>Existujúce profily</h3>
+            <p class="card-desc">Zoznam vytvorených trénerov a kategórií</p>
+          </div>
+          <div id="users-list-container" class="users-list-container" style="flex: 1;">
+            <!-- Loaded dynamically -->
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3. RESERVATION MODAL (Create/Edit) -->
+  <div id="reservation-modal" class="modal-overlay hidden">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 id="modal-title">Nová rezervácia plochy</h3>
+        <button id="close-modal-btn" class="btn-close">&times;</button>
+      </div>
+      <form id="reservation-form">
+        <input type="hidden" id="res-id">
+
+        <!-- Visual helper map inside Modal -->
+        <div class="modal-helper-map-wrapper">
+          <label>Vizuálny nákres polôh ihrísk</label>
+          <div class="modal-pitch-helper">
+            <div class="mini-pitch-card training-mini" data-field-id="training_full">
+              <div class="mini-label">Tréningové</div>
+              <div class="mini-split">
+                <div class="mini-half" data-field-id="training_half_a">
+                  <div class="mini-half-label">Pol. A</div>
+                  <div class="mini-quarters">
+                    <div class="mini-quarter" data-field-id="training_quarter_a1">A1</div>
+                    <div class="mini-quarter" data-field-id="training_quarter_a2">A2</div>
+                  </div>
+                </div>
+                <div class="mini-half" data-field-id="training_half_b">
+                  <div class="mini-half-label">Pol. B</div>
+                  <div class="mini-quarters">
+                    <div class="mini-quarter" data-field-id="training_quarter_b1">B1</div>
+                    <div class="mini-quarter" data-field-id="training_quarter_b2">B2</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="mini-pitch-card main-mini" data-field-id="main_full">
+              <div class="mini-label">Hlavné</div>
+              <div class="mini-split">
+                <div class="mini-half" data-field-id="main_half_a">
+                  <div class="mini-half-label">Pol. A</div>
+                  <div class="mini-quarters">
+                    <div class="mini-quarter" data-field-id="main_quarter_a1">A1</div>
+                    <div class="mini-quarter" data-field-id="main_quarter_a2">A2</div>
+                  </div>
+                </div>
+                <div class="mini-half" data-field-id="main_half_b">
+                  <div class="mini-half-label">Pol. B</div>
+                  <div class="mini-quarters">
+                    <div class="mini-quarter" data-field-id="main_quarter_b1">B1</div>
+                    <div class="mini-quarter" data-field-id="main_quarter_b2">B2</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="res-field-id">Rezervovaná plocha</label>
+          <select id="res-field-id" required>
+            <!-- Loaded dynamically -->
+          </select>
+        </div>
+
+        <!-- Admin-only Field: Select Coach on behalf -->
+        <div class="form-group hidden" id="res-user-select-group">
+          <label for="res-user-id">Tréner / Kategória (Rezervovať pre)</label>
+          <select id="res-user-id">
+            <!-- Loaded dynamically -->
+          </select>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="res-date">Dátum</label>
+            <input type="date" id="res-date" required>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="res-start-time">Začiatok</label>
+            <select id="res-start-time" required>
+              <!-- Options filled programmatically from 08:00 to 21:00 in 30min slots -->
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="res-end-time">Koniec</label>
+            <select id="res-end-time" required>
+              <!-- Options filled programmatically from 08:30 to 21:30 in 30min slots -->
+            </select>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" id="delete-res-btn" class="btn btn-danger hidden">Zmazať rezerváciu</button>
+          <div class="modal-footer-actions">
+            <button type="button" id="cancel-res-btn" class="btn btn-secondary">Zrušiť</button>
+            <button type="submit" class="btn btn-primary">Uložiť rezerváciu</button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
