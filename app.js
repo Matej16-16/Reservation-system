@@ -94,7 +94,7 @@ function generateTimeSlots() {
 
 const TIME_SLOTS = generateTimeSlots();
 
-// Pure JS SHA-256 fallback for hashed passwords if needed
+// Pure JS SHA-256 fallback
 function sha256(ascii) {
   function rightRotate(value, amount) {
     return (value >>> amount) | (value << (32 - amount));
@@ -389,7 +389,7 @@ async function apiRequest(endpoint, options = {}) {
     // POST /reservations
     if (method === 'POST' && !resId) {
       const body = options.body || {};
-      const { field_id, start_time, end_time, user_id } = body;
+      const { field_id, start_time, end_time, user_id, event_type, opponent, note } = body;
       
       const targetUserId = user_id || (state.user ? state.user.id : 'u-u19');
       const targetUser = (state.users && state.users.find(u => u.id === targetUserId)) || state.user || { name: 'Tréner', color: '#3b82f6' };
@@ -412,6 +412,9 @@ async function apiRequest(endpoint, options = {}) {
         field_id,
         start_time: new Date(start_time).toISOString(),
         end_time: new Date(end_time).toISOString(),
+        event_type: event_type || 'training',
+        opponent: opponent || '',
+        note: note || '',
         created_at: new Date().toISOString()
       };
 
@@ -434,7 +437,7 @@ async function apiRequest(endpoint, options = {}) {
     // PUT /reservations/:id
     if (method === 'PUT' && resId) {
       const body = options.body || {};
-      const { field_id, start_time, end_time, user_id } = body;
+      const { field_id, start_time, end_time, user_id, event_type, opponent, note } = body;
 
       const existingReservations = await apiRequest('/reservations');
       for (const r of existingReservations) {
@@ -450,8 +453,12 @@ async function apiRequest(endpoint, options = {}) {
       const updateData = {
         field_id,
         start_time: new Date(start_time).toISOString(),
-        end_time: new Date(end_time).toISOString()
+        end_time: new Date(end_time).toISOString(),
+        event_type: event_type || 'training',
+        opponent: opponent || '',
+        note: note || ''
       };
+
       if (user_id) {
         updateData.user_id = user_id;
         const targetUser = state.users.find(u => u.id === user_id);
@@ -511,13 +518,11 @@ async function apiRequest(endpoint, options = {}) {
             querySnapshot.forEach(docSnap => {
               usersList.push({ id: docSnap.id, ...docSnap.data() });
             });
-            // Update local DB cache as well
             const localDb = getLocalDB();
             localDb.users = usersList;
             saveLocalDB(localDb);
             return usersList;
           } else {
-            // Seed Firestore with default users on first load
             for (const u of DEFAULT_USERS) {
               await setDoc(doc(db, "users", u.id), u);
             }
@@ -583,7 +588,6 @@ async function apiRequest(endpoint, options = {}) {
         saveLocalDB(localDb);
       }
 
-      // If updating currently logged in user, update session state
       if (state.user && state.user.id === userId) {
         state.user = { ...state.user, name, email, role, color };
         localStorage.setItem('user', JSON.stringify(state.user));
@@ -766,7 +770,6 @@ async function initDashboard() {
     state.users = await apiRequest('/users');
 
     populateFieldsDropdowns();
-    renderPitchMap();
     renderMiniPitchMap();
     
     if (state.user && state.user.role === 'admin') {
@@ -797,25 +800,6 @@ function populateFieldsDropdowns() {
     opt.textContent = prefix + f.name;
     resFieldSelect.appendChild(opt);
   });
-}
-
-function renderPitchMap() {
-  const trainingPitchCard = document.querySelector('.left-panel .training-pitch');
-  const mainPitchCard = document.querySelector('.left-panel .main-pitch');
-  
-  if (!trainingPitchCard || !mainPitchCard) return;
-
-  if (state.activeFieldMode === 'training') {
-    trainingPitchCard.classList.remove('filtered-out');
-    trainingPitchCard.classList.add('active-filter');
-    mainPitchCard.classList.remove('active-filter');
-    mainPitchCard.classList.add('filtered-out');
-  } else {
-    mainPitchCard.classList.remove('filtered-out');
-    mainPitchCard.classList.add('active-filter');
-    trainingPitchCard.classList.remove('active-filter');
-    trainingPitchCard.classList.add('filtered-out');
-  }
 }
 
 function renderMiniPitchMap() {
@@ -858,7 +842,6 @@ async function refreshCalendar() {
     state.reservations = await apiRequest(`/reservations?start=${range.start.toISOString()}&end=${range.end.toISOString()}`);
     renderCalendarGrid();
     renderReservationsOverlay();
-    renderPitchMap();
   } catch (err) {
     showToast('Chyba kalendára', 'Nepodarilo sa aktualizovať rezervácie.', 'error');
   }
@@ -1089,11 +1072,26 @@ function renderReservationsOverlay() {
     const formatTimeStr = (d) => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
     const fieldName = state.fieldsMap[res.field_id] ? state.fieldsMap[res.field_id].name : res.field_id;
 
+    // Event Type Badging
+    let eventTypeBadge = '';
+    if (res.event_type === 'friendly_match') {
+      eventTypeBadge = `<div class="res-card-event-type">⚽ Prípravný vs ${res.opponent || 'Súper'}</div>`;
+    } else if (res.event_type === 'league_match') {
+      eventTypeBadge = `<div class="res-card-event-type">⚽ Majstrovský vs ${res.opponent || 'Súper'}</div>`;
+    } else if (res.event_type === 'tournament') {
+      eventTypeBadge = `<div class="res-card-event-type">🏆 Turnaj</div>`;
+    } else if (res.event_type === 'other') {
+      eventTypeBadge = `<div class="res-card-event-type">ℹ️ ${res.note || 'Iné'}</div>`;
+    } else {
+      eventTypeBadge = `<div class="res-card-event-type">Tréning</div>`;
+    }
+
     card.innerHTML = `
       <div class="res-card-header">
         <span class="res-card-coach" style="font-weight: 700;">${res.user_name}</span>
         <span class="res-card-time" style="font-size: 0.6rem;">${formatTimeStr(localStart)} - ${formatTimeStr(localEnd)}</span>
       </div>
+      ${eventTypeBadge}
       <div class="res-card-field">${fieldName}</div>
     `;
 
@@ -1204,6 +1202,34 @@ function combineDateAndTimeISO(dateObj, timeStr) {
 // ==========================================================================
 // 11. RESERVATION MODAL CONTROLLER
 // ==========================================================================
+function updateEventTypeFields() {
+  const typeSelect = document.getElementById('res-event-type');
+  const opponentGroup = document.getElementById('res-opponent-group');
+  const opponentInput = document.getElementById('res-opponent');
+  const noteGroup = document.getElementById('res-note-group');
+  const noteInput = document.getElementById('res-note');
+
+  if (!typeSelect) return;
+  const val = typeSelect.value;
+
+  if (val === 'friendly_match' || val === 'league_match') {
+    opponentGroup.classList.remove('hidden');
+    opponentInput.required = true;
+    noteGroup.classList.add('hidden');
+    noteInput.required = false;
+  } else if (val === 'other') {
+    noteGroup.classList.remove('hidden');
+    noteInput.required = true;
+    opponentGroup.classList.add('hidden');
+    opponentInput.required = false;
+  } else {
+    opponentGroup.classList.add('hidden');
+    opponentInput.required = false;
+    noteGroup.classList.add('hidden');
+    noteInput.required = false;
+  }
+}
+
 function openReservationModal(res = null) {
   const modal = document.getElementById('reservation-modal');
   const form = document.getElementById('reservation-form');
@@ -1234,6 +1260,10 @@ function openReservationModal(res = null) {
     document.getElementById('res-date').value = formatDateISO(localStart);
     document.getElementById('res-start-time').value = formatTimePadding(localStart);
     document.getElementById('res-end-time').value = formatTimePadding(localEnd);
+
+    document.getElementById('res-event-type').value = res.event_type || 'training';
+    document.getElementById('res-opponent').value = res.opponent || '';
+    document.getElementById('res-note').value = res.note || '';
   } else {
     title.textContent = 'Nová rezervácia plochy';
     document.getElementById('res-id').value = '';
@@ -1257,7 +1287,13 @@ function openReservationModal(res = null) {
       document.getElementById('res-start-time').value = '16:00';
       document.getElementById('res-end-time').value = '17:30';
     }
+
+    document.getElementById('res-event-type').value = 'training';
+    document.getElementById('res-opponent').value = '';
+    document.getElementById('res-note').value = '';
   }
+
+  updateEventTypeFields();
 
   const selectedFieldId = document.getElementById('res-field-id').value;
   document.querySelectorAll('.modal-pitch-helper .mini-pitch-card, .modal-pitch-helper .mini-half, .modal-pitch-helper .mini-quarter').forEach(c => {
@@ -1310,6 +1346,10 @@ async function saveReservation(e) {
   const startStr = document.getElementById('res-start-time').value;
   const endStr = document.getElementById('res-end-time').value;
   
+  const eventType = document.getElementById('res-event-type').value;
+  const opponent = document.getElementById('res-opponent').value.trim();
+  const note = document.getElementById('res-note').value.trim();
+
   const startDate = new Date(`${dateStr}T${startStr}:00`);
   const endDate = new Date(`${dateStr}T${endStr}:00`);
 
@@ -1318,10 +1358,23 @@ async function saveReservation(e) {
     return;
   }
 
+  if ((eventType === 'friendly_match' || eventType === 'league_match') && !opponent) {
+    showToast('Chýbajúce údaje', 'Pre zápas je povinné zadať názov súpera.', 'error');
+    return;
+  }
+
+  if (eventType === 'other' && !note) {
+    showToast('Chýbajúce údaje', 'Pre udalosť "Iné" je povinné zadať poznámku / popis.', 'error');
+    return;
+  }
+
   const payload = {
     field_id: fieldId,
     start_time: startDate.toISOString(),
-    end_time: endDate.toISOString()
+    end_time: endDate.toISOString(),
+    event_type: eventType,
+    opponent,
+    note
   };
 
   if (state.user && state.user.role === 'admin') {
@@ -1571,6 +1624,26 @@ if (resForm) resForm.addEventListener('submit', saveReservation);
 
 const deleteResBtn = document.getElementById('delete-res-btn');
 if (deleteResBtn) deleteResBtn.addEventListener('click', deleteReservation);
+
+// Event Type change listener
+const resEventType = document.getElementById('res-event-type');
+if (resEventType) {
+  resEventType.addEventListener('change', updateEventTypeFields);
+}
+
+// Mobile FAB & Toggle listeners
+const mobileFab = document.getElementById('mobile-add-res-btn');
+if (mobileFab) {
+  mobileFab.addEventListener('click', () => openReservationModal());
+}
+
+const togglePitchBtn = document.getElementById('toggle-pitch-img-btn');
+if (togglePitchBtn) {
+  togglePitchBtn.addEventListener('click', () => {
+    const wrapper = document.getElementById('pitch-img-wrapper');
+    if (wrapper) wrapper.classList.toggle('collapsed');
+  });
+}
 
 // Navigation Controls
 document.getElementById('prev-week-btn').addEventListener('click', () => {

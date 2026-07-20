@@ -70,106 +70,23 @@
     <div class="dashboard-content">
       <!-- Left Panel: Interactive Pitch Map & Sidebar filters -->
       <aside class="left-panel">
-        <div class="panel-card">
-          <div class="card-header">
+        <div class="panel-card pitch-layout-panel">
+          <div class="card-header pitch-layout-header">
             <h3>Nákres a rozdelenie plôch</h3>
-            <p class="card-desc">Vizuálna pomôcka rozloženia plôch</p>
+            <button type="button" id="toggle-pitch-img-btn" class="btn btn-secondary btn-xs mobile-only-toggle">Nákres 🗺️</button>
           </div>
           
-          <!-- Static Visual Pitch Map -->
-          <div class="pitch-container static-pitch-map">
-            <!-- Training Pitch -->
-            <div class="pitch-card training-pitch" data-field-id="training_full">
-              <div class="pitch-overlay"></div>
-              <div class="pitch-label training-full-label">Tréningové ihrisko (Celé)</div>
-              
-              <div class="training-pitch-split">
-                <!-- Half A -->
-                <div class="pitch-half half-a" data-field-id="training_half_a">
-                  <div class="pitch-overlay"></div>
-                  <div class="pitch-label half-label">Trén. Polovica A</div>
-                  
-                  <div class="quarters-container">
-                    <div class="pitch-quarter quarter-a1" data-field-id="training_quarter_a1">
-                      <div class="pitch-overlay"></div>
-                      <div class="pitch-label quarter-label">Trén. Štvrtina A1</div>
-                    </div>
-                    <div class="pitch-quarter quarter-a2" data-field-id="training_quarter_a2">
-                      <div class="pitch-overlay"></div>
-                      <div class="pitch-label quarter-label">Trén. Štvrtina A2</div>
-                    </div>
-                  </div>
-                </div>
-
-                <!-- Half B -->
-                <div class="pitch-half half-b" data-field-id="training_half_b">
-                  <div class="pitch-overlay"></div>
-                  <div class="pitch-label half-label">Trén. Polovica B</div>
-                  
-                  <div class="quarters-container">
-                    <div class="pitch-quarter quarter-b1" data-field-id="training_quarter_b1">
-                      <div class="pitch-overlay"></div>
-                      <div class="pitch-label quarter-label">Trén. Štvrtina B1</div>
-                    </div>
-                    <div class="pitch-quarter quarter-b2" data-field-id="training_quarter_b2">
-                      <div class="pitch-overlay"></div>
-                      <div class="pitch-label quarter-label">Trén. Štvrtina B2</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <!-- Main Pitch -->
-            <div class="pitch-card main-pitch" data-field-id="main_full">
-              <div class="pitch-overlay"></div>
-              <div class="pitch-label main-full-label">Hlavné ihrisko (Celé)</div>
-              
-              <div class="main-pitch-split">
-                <!-- Half A -->
-                <div class="pitch-half half-a" data-field-id="main_half_a">
-                  <div class="pitch-overlay"></div>
-                  <div class="pitch-label half-label">Polovica A</div>
-                  
-                  <div class="quarters-container">
-                    <div class="pitch-quarter quarter-a1" data-field-id="main_quarter_a1">
-                      <div class="pitch-overlay"></div>
-                      <div class="pitch-label quarter-label">Štvrtina A1</div>
-                    </div>
-                    <div class="pitch-quarter quarter-a2" data-field-id="main_quarter_a2">
-                      <div class="pitch-overlay"></div>
-                      <div class="pitch-label quarter-label">Štvrtina A2</div>
-                    </div>
-                  </div>
-                </div>
-
-                <!-- Half B -->
-                <div class="pitch-half half-b" data-field-id="main_half_b">
-                  <div class="pitch-overlay"></div>
-                  <div class="pitch-label half-label">Polovica B</div>
-                  
-                  <div class="quarters-container">
-                    <div class="pitch-quarter quarter-b1" data-field-id="main_quarter_b1">
-                      <div class="pitch-overlay"></div>
-                      <div class="pitch-label quarter-label">Štvrtina B1</div>
-                    </div>
-                    <div class="pitch-quarter quarter-b2" data-field-id="main_quarter_b2">
-                      <div class="pitch-overlay"></div>
-                      <div class="pitch-label quarter-label">Štvrtina B2</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
+          <div id="pitch-img-wrapper" class="pitch-img-wrapper">
+            <img src="pitch_layout.jpg" alt="Nákres ihriska A1, A2, B1, B2" class="pitch-layout-image">
           </div>
 
-          <div class="pitch-legend">
+          <div class="pitch-legend mt-4">
             <div class="legend-item">
               <span class="legend-color" style="background-color: var(--primary);"></span>
-              <span>U19, U15 atď. farebne odlíšené tímy</span>
+              <span>Farby tímov a trénerov</span>
             </div>
-            <div class="legend-item" style="font-size: 0.7rem; line-height: 1.4;">
-              ℹ️ Rezervácia celej polovice obsadí A1+A2 (alebo B1+B2). Rezervácia celého ihriska obsadí všetky štyri štvrtiny.
+            <div class="legend-item" style="font-size: 0.72rem; line-height: 1.4; opacity: 0.85; margin-top: 4px;">
+              ℹ️ Štvrtiny <strong>A1, A2, B1, B2</strong> zodpovedajú stĺpcom v kalendári. Polovica A obsadí A1+A2, Celé ihrisko obsadí 4 sloty.
             </div>
           </div>
         </div>
@@ -232,6 +149,11 @@
       </main>
 
     </div>
+
+    <!-- Mobile Floating Action Button -->
+    <button id="mobile-add-res-btn" class="mobile-fab" title="Pridať novú rezerváciu">
+      <span style="font-size: 1.4rem; font-weight: 800; line-height: 1;">+</span> Nová rezervácia
+    </button>
   </section>
  
   <!-- 3. ADMIN SECTION (FULL PAGE VIEW) -->
@@ -371,6 +293,27 @@
           <select id="res-user-id">
             <!-- Loaded dynamically -->
           </select>
+        </div>
+
+        <div class="form-group">
+          <label for="res-event-type">Typ udalosti</label>
+          <select id="res-event-type" required>
+            <option value="training" selected>Tréning</option>
+            <option value="friendly_match">Prípravný zápas</option>
+            <option value="league_match">Majstrovský zápas</option>
+            <option value="tournament">Turnaj</option>
+            <option value="other">Iné</option>
+          </select>
+        </div>
+
+        <div class="form-group hidden" id="res-opponent-group">
+          <label for="res-opponent">Názov súpera <span style="color: var(--danger);">*</span></label>
+          <input type="text" id="res-opponent" placeholder="napr. FK Slovan Bratislava">
+        </div>
+
+        <div class="form-group hidden" id="res-note-group">
+          <label for="res-note">Poznámka / Popis udalosti <span style="color: var(--danger);">*</span></label>
+          <input type="text" id="res-note" placeholder="Opíšte o akú udalosť sa jedná">
         </div>
 
         <div class="form-row">

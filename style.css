@@ -1494,4 +1494,123 @@ body {
   font-size: 0.75rem;
 }
 
+/* Pitch Layout Image Styling */
+.pitch-layout-panel {
+  padding: 1.25rem;
+}
+
+.pitch-layout-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.85rem;
+}
+
+.pitch-img-wrapper {
+  width: 100%;
+  border-radius: var(--border-radius-md);
+  overflow: hidden;
+  border: 1px solid var(--border-color);
+  background-color: #0d1322;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+}
+
+.pitch-layout-image {
+  width: 100%;
+  height: auto;
+  display: block;
+  object-fit: contain;
+  transition: transform var(--transition-normal);
+}
+
+.pitch-layout-image:hover {
+  transform: scale(1.02);
+}
+
+.mobile-only-toggle {
+  display: none;
+}
+
+/* Floating Action Button (FAB) for Mobile */
+.mobile-fab {
+  display: none;
+  position: fixed;
+  bottom: 1.5rem;
+  right: 1.5rem;
+  z-index: 90;
+  background: linear-gradient(135deg, var(--primary) 0%, #059669 100%);
+  color: var(--text-inverse);
+  border: none;
+  border-radius: 50px;
+  padding: 0.85rem 1.4rem;
+  font-size: 0.95rem;
+  font-weight: 700;
+  box-shadow: 0 8px 25px rgba(16, 185, 129, 0.45);
+  cursor: pointer;
+  align-items: center;
+  gap: 0.5rem;
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.mobile-fab:active {
+  transform: scale(0.95);
+}
+
+/* Event Type Labels on Calendar Cards */
+.res-card-event-type {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  margin-top: 2px;
+  display: inline-block;
+  opacity: 0.9;
+}
+
+/* Responsive Mobile Layout Adjustments */
+@media (max-width: 768px) {
+  .dashboard-content {
+    flex-direction: column;
+    gap: 1rem;
+  }
+  
+  .left-panel {
+    width: 100%;
+  }
+
+  .mobile-only-toggle {
+    display: inline-flex;
+  }
+
+  .pitch-img-wrapper.collapsed {
+    display: none;
+  }
+
+  .mobile-fab {
+    display: flex;
+  }
+
+  .app-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.85rem;
+  }
+
+  .header-right {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .calendar-controls-wrapper {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.75rem;
+  }
+
+  .controls-group {
+    justify-content: space-between;
+  }
+}
+
+
 
