@@ -406,6 +406,49 @@
     </div>
   </div>
 
+  <!-- 4. EDIT USER MODAL -->
+  <div id="edit-user-modal" class="modal-overlay hidden">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>Upraviť profil používateľa</h3>
+        <button id="close-edit-user-modal-btn" class="btn-close">&times;</button>
+      </div>
+      <form id="edit-user-form" class="admin-form">
+        <input type="hidden" id="edit-user-id">
+        <div class="form-group">
+          <label for="edit-user-name">Meno / Názov kategórie</label>
+          <input type="text" id="edit-user-name" required placeholder="napr. U17">
+        </div>
+        <div class="form-group">
+          <label for="edit-user-email">Prihlasovací E-mail</label>
+          <input type="email" id="edit-user-email" placeholder="u17@fc.sk">
+        </div>
+        <div class="form-group">
+          <label for="edit-user-password">Heslo</label>
+          <input type="text" id="edit-user-password" required placeholder="Heslo">
+        </div>
+        <div class="form-group">
+          <label for="edit-user-role">Rola</label>
+          <select id="edit-user-role" required>
+            <option value="coach">Tréner (Coach)</option>
+            <option value="admin">Administrátor (Admin)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="edit-user-color">Farba v kalendári</label>
+          <div class="color-picker-wrapper">
+            <input type="color" id="edit-user-color" value="#8b5cf6">
+            <span class="color-picker-label">Zvoľte odtieň</span>
+          </div>
+        </div>
+        <div class="modal-footer" style="margin-top: 1.5rem; justify-content: flex-end; gap: 0.75rem;">
+          <button type="button" id="cancel-edit-user-btn" class="btn btn-secondary">Zrušiť</button>
+          <button type="submit" class="btn btn-primary">Uložiť zmeny</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <script type="module" src="app.js"></script>
 </body>
 </html>

@@ -94,7 +94,7 @@ function generateTimeSlots() {
 
 const TIME_SLOTS = generateTimeSlots();
 
-// Pure JS SHA-256 fallback for local simulated auth
+// Pure JS SHA-256 fallback for hashed passwords if needed
 function sha256(ascii) {
   function rightRotate(value, amount) {
     return (value >>> amount) | (value << (32 - amount));
@@ -269,7 +269,7 @@ const DEFAULT_USERS = [
     id: "u-admin",
     name: "Administrátor",
     email: "admin@fc.sk",
-    password: "240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9", // admin123
+    password: "admin123",
     role: "admin",
     color: "#ef4444"
   },
@@ -277,7 +277,7 @@ const DEFAULT_USERS = [
     id: "u-u19",
     name: "Tréner U19",
     email: "u19@fc.sk",
-    password: "10eb735dd6bb72154570722228be65dfe8b2bafe6273601a21ae3bd8f32b560d", // u19pwd
+    password: "u19pwd",
     role: "coach",
     color: "#3b82f6"
   },
@@ -285,7 +285,7 @@ const DEFAULT_USERS = [
     id: "u-u15",
     name: "Tréner U15",
     email: "u15@fc.sk",
-    password: "e0cb6268138dd065dc5e3cfb2649f11334944d8859d82a46b77ee16bfa760502", // u15pwd
+    password: "u15pwd",
     role: "coach",
     color: "#10b981"
   }
@@ -303,8 +303,11 @@ function getLocalDB() {
   const localDb = JSON.parse(dbStr);
   if (!localDb.fields || localDb.fields.length < 14) {
     localDb.fields = DEFAULT_FIELDS;
-    saveLocalDB(localDb);
   }
+  if (!localDb.users || localDb.users.length === 0) {
+    localDb.users = DEFAULT_USERS;
+  }
+  saveLocalDB(localDb);
   return localDb;
 }
 
@@ -372,9 +375,9 @@ async function apiRequest(endpoint, options = {}) {
         });
       }
 
-      const localUsers = getLocalDB().users;
+      const allUsers = state.users.length > 0 ? state.users : getLocalDB().users;
       return list.map(r => {
-        const foundUser = localUsers.find(u => u.id === r.user_id) || (state.user && state.user.id === r.user_id ? state.user : null);
+        const foundUser = allUsers.find(u => u.id === r.user_id) || (state.user && state.user.id === r.user_id ? state.user : null);
         return {
           ...r,
           user_name: r.user_name || (foundUser ? foundUser.name : 'Neznámy tréner'),
@@ -449,7 +452,14 @@ async function apiRequest(endpoint, options = {}) {
         start_time: new Date(start_time).toISOString(),
         end_time: new Date(end_time).toISOString()
       };
-      if (user_id) updateData.user_id = user_id;
+      if (user_id) {
+        updateData.user_id = user_id;
+        const targetUser = state.users.find(u => u.id === user_id);
+        if (targetUser) {
+          updateData.user_name = targetUser.name;
+          updateData.user_color = targetUser.color;
+        }
+      }
 
       if (useFirebase) {
         try {
@@ -486,25 +496,47 @@ async function apiRequest(endpoint, options = {}) {
     }
   }
 
-  // 3. USERS API
+  // 3. USERS API (PERSISTED IN FIRESTORE & LOCAL STORAGE)
   if (endpoint.startsWith('/users')) {
     const parts = endpoint.split('?')[0].split('/').filter(Boolean);
     const userId = parts[1];
 
+    // GET /users
     if (method === 'GET' && !userId) {
+      let usersList = [];
+      if (useFirebase) {
+        try {
+          const querySnapshot = await getDocs(collection(db, "users"));
+          if (!querySnapshot.empty) {
+            querySnapshot.forEach(docSnap => {
+              usersList.push({ id: docSnap.id, ...docSnap.data() });
+            });
+            // Update local DB cache as well
+            const localDb = getLocalDB();
+            localDb.users = usersList;
+            saveLocalDB(localDb);
+            return usersList;
+          } else {
+            // Seed Firestore with default users on first load
+            for (const u of DEFAULT_USERS) {
+              await setDoc(doc(db, "users", u.id), u);
+            }
+            return DEFAULT_USERS;
+          }
+        } catch (err) {
+          console.warn("Firestore users fetch error, fallback to local DB:", err);
+        }
+      }
       const localDb = getLocalDB();
-      return localDb.users.map(u => {
-        const us = { ...u };
-        delete us.password;
-        return us;
-      });
+      return localDb.users || DEFAULT_USERS;
     }
 
+    // POST /users (Create User)
     if (method === 'POST' && !userId) {
       const { name, email, password, role, color } = options.body || {};
-      const localDb = getLocalDB();
+      const currentUsers = await apiRequest('/users');
 
-      if (localDb.users.some(u => u.name.toLowerCase() === name.toLowerCase())) {
+      if (currentUsers.some(u => u.name.toLowerCase() === name.toLowerCase())) {
         throw new Error('Používateľ s týmto názvom kategórie už existuje.');
       }
 
@@ -512,17 +544,63 @@ async function apiRequest(endpoint, options = {}) {
         id: 'u-' + Math.random().toString(36).substring(2, 11),
         name,
         email: email ? email.toLowerCase() : `${name.toLowerCase().replace(/\s+/g, '')}@fc.sk`,
-        password: sha256(password || 'password'),
+        password: password || 'password123',
         role: role || 'coach',
         color: color || '#8b5cf6'
       };
 
+      if (useFirebase) {
+        try {
+          await setDoc(doc(db, "users", newUser.id), newUser);
+        } catch (err) {
+          console.warn("Firestore user create warning:", err);
+        }
+      }
+
+      const localDb = getLocalDB();
       localDb.users.push(newUser);
       saveLocalDB(localDb);
       return newUser;
     }
 
+    // PUT /users/:id (Edit User)
+    if (method === 'PUT' && userId) {
+      const { name, email, password, role, color } = options.body || {};
+      const updateData = { name, email, password, role, color };
+
+      if (useFirebase) {
+        try {
+          await setDoc(doc(db, "users", userId), updateData, { merge: true });
+        } catch (err) {
+          console.warn("Firestore user update warning:", err);
+        }
+      }
+
+      const localDb = getLocalDB();
+      const idx = localDb.users.findIndex(u => u.id === userId);
+      if (idx !== -1) {
+        localDb.users[idx] = { ...localDb.users[idx], ...updateData };
+        saveLocalDB(localDb);
+      }
+
+      // If updating currently logged in user, update session state
+      if (state.user && state.user.id === userId) {
+        state.user = { ...state.user, name, email, role, color };
+        localStorage.setItem('user', JSON.stringify(state.user));
+      }
+
+      return { id: userId, ...updateData };
+    }
+
+    // DELETE /users/:id
     if (method === 'DELETE' && userId) {
+      if (useFirebase) {
+        try {
+          await deleteDoc(doc(db, "users", userId));
+        } catch (err) {
+          console.warn("Firestore user delete warning:", err);
+        }
+      }
       const localDb = getLocalDB();
       localDb.users = localDb.users.filter(u => u.id !== userId);
       localDb.reservations = localDb.reservations.filter(r => r.user_id !== userId);
@@ -567,18 +645,23 @@ async function handleLogin(e) {
       initDashboard();
       return;
     } catch (err) {
-      console.warn("Firebase Auth failed, checking local simulation DB:", err);
+      console.warn("Firebase Auth failed, checking local & Firestore DB:", err);
     }
   }
 
-  // Fallback Simulation Login
-  const localDb = getLocalDB();
-  const foundUser = localDb.users.find(u => 
+  // Fallback Matching against DB user accounts
+  const allUsers = await apiRequest('/users');
+  const foundUser = allUsers.find(u => 
     (u.email && u.email.toLowerCase() === emailOrUsername.toLowerCase()) ||
     (u.name && u.name.toLowerCase() === emailOrUsername.split('@')[0].toLowerCase())
   );
 
-  if (!foundUser || foundUser.password !== sha256(password)) {
+  const isPasswordCorrect = foundUser && (
+    foundUser.password === password || 
+    foundUser.password === sha256(password)
+  );
+
+  if (!foundUser || !isPasswordCorrect) {
     showToast('Chyba prihlásenia', 'Nesprávne prihlasovacie meno alebo heslo.', 'error');
     return;
   }
@@ -679,6 +762,8 @@ async function initDashboard() {
     state.fields.forEach(f => {
       state.fieldsMap[f.id] = f;
     });
+
+    state.users = await apiRequest('/users');
 
     populateFieldsDropdowns();
     renderPitchMap();
@@ -1280,7 +1365,7 @@ function closeModal() {
 }
 
 // ==========================================================================
-// 12. ADMIN PAGE CONTROLLER (USER ACCOUNTS)
+// 12. ADMIN PAGE CONTROLLER (USER ACCOUNTS & EDIT MODAL)
 // ==========================================================================
 async function loadAdminUsers() {
   try {
@@ -1310,24 +1395,93 @@ function renderAdminUsersList() {
     const item = document.createElement('div');
     item.className = 'user-list-item';
     const isSelf = state.user && u.id === state.user.id;
+    const pwdDisplay = u.password || '—';
     
     item.innerHTML = `
       <div class="user-list-info">
-        <span class="user-color-dot" style="background-color: ${u.color || '#4b5563'};"></span>
-        <div>
-          <div class="user-list-name">${u.name} <span class="user-list-role">${u.role}</span></div>
-          <div class="user-list-email">${u.email || ''}</div>
+        <span class="user-color-dot" style="background-color: ${u.color || '#4b5563'}; width: 14px; height: 14px; border-radius: 50%;"></span>
+        <div class="user-list-details">
+          <div class="user-list-name">${u.name} <span class="user-list-role">${u.role === 'admin' ? 'Admin' : 'Tréner'}</span></div>
+          <div class="user-list-meta">
+            <span>${u.email || 'Bez e-mailu'}</span>
+            <span class="user-password-badge">
+              🔑 <span class="pwd-text" data-plain="${pwdDisplay}">••••••••</span>
+              <button type="button" class="toggle-pwd-btn" title="Ukázať / Skryť heslo">👁️</button>
+            </span>
+          </div>
         </div>
       </div>
-      ${isSelf ? '' : `<button class="btn btn-danger btn-link btn-xs delete-user-btn" data-user-id="${u.id}">&times; Zmazať</button>`}
+      <div class="user-item-actions">
+        <button type="button" class="btn btn-secondary btn-xs edit-user-btn" data-user-id="${u.id}">✏️ Upraviť</button>
+        ${isSelf ? '' : `<button type="button" class="btn btn-danger btn-link btn-xs delete-user-btn" data-user-id="${u.id}">&times; Zmazať</button>`}
+      </div>
     `;
 
+    // Toggle password view
+    const toggleBtn = item.querySelector('.toggle-pwd-btn');
+    const pwdText = item.querySelector('.pwd-text');
+    toggleBtn.addEventListener('click', () => {
+      if (pwdText.textContent === '••••••••') {
+        pwdText.textContent = pwdText.getAttribute('data-plain');
+      } else {
+        pwdText.textContent = '••••••••';
+      }
+    });
+
+    // Edit user button
+    item.querySelector('.edit-user-btn').addEventListener('click', () => openEditUserModal(u));
+
+    // Delete user button
     if (!isSelf) {
       item.querySelector('.delete-user-btn').addEventListener('click', () => deleteUserAccount(u.id, u.name));
     }
 
     container.appendChild(item);
   });
+}
+
+function openEditUserModal(userObj) {
+  const modal = document.getElementById('edit-user-modal');
+  if (!modal) return;
+
+  document.getElementById('edit-user-id').value = userObj.id;
+  document.getElementById('edit-user-name').value = userObj.name;
+  document.getElementById('edit-user-email').value = userObj.email || '';
+  document.getElementById('edit-user-password').value = userObj.password || '';
+  document.getElementById('edit-user-role').value = userObj.role || 'coach';
+  document.getElementById('edit-user-color').value = userObj.color || '#8b5cf6';
+
+  modal.classList.remove('hidden');
+}
+
+function closeEditUserModal() {
+  const modal = document.getElementById('edit-user-modal');
+  if (modal) modal.classList.add('hidden');
+}
+
+async function handleEditUserSubmit(e) {
+  e.preventDefault();
+  const userId = document.getElementById('edit-user-id').value;
+  const name = document.getElementById('edit-user-name').value.trim();
+  const email = document.getElementById('edit-user-email').value.trim();
+  const password = document.getElementById('edit-user-password').value;
+  const role = document.getElementById('edit-user-role').value;
+  const color = document.getElementById('edit-user-color').value;
+
+  try {
+    await apiRequest(`/users/${userId}`, {
+      method: 'PUT',
+      body: { name, email, password, role, color }
+    });
+    
+    showToast('Profil upravený', `Profil pre '${name}' bol úspešne upravený.`);
+    closeEditUserModal();
+    
+    await loadAdminUsers();
+    await refreshCalendar();
+  } catch (err) {
+    showToast('Chyba úpravy profilu', err.message, 'error');
+  }
 }
 
 async function handleCreateUserAccount(e) {
@@ -1393,6 +1547,17 @@ const createUserForm = document.getElementById('create-user-form');
 if (createUserForm) {
   createUserForm.addEventListener('submit', handleCreateUserAccount);
 }
+
+const editUserForm = document.getElementById('edit-user-form');
+if (editUserForm) {
+  editUserForm.addEventListener('submit', handleEditUserSubmit);
+}
+
+const closeEditUserModalBtn = document.getElementById('close-edit-user-modal-btn');
+if (closeEditUserModalBtn) closeEditUserModalBtn.addEventListener('click', closeEditUserModal);
+
+const cancelEditUserBtn = document.getElementById('cancel-edit-user-btn');
+if (cancelEditUserBtn) cancelEditUserBtn.addEventListener('click', closeEditUserModal);
 
 // Modal Buttons
 const closeModalBtn = document.getElementById('close-modal-btn');
