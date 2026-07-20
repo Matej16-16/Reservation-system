@@ -34,10 +34,6 @@
         <button type="submit" class="btn btn-primary btn-block">Prihlásiť sa</button>
       </form>
       <div class="auth-footer">
-        <p>Predvolené účty: <br>
-           Admin: <code>admin@fc.sk</code> / <code>admin123</code><br>
-           Tréner: <code>u19@fc.sk</code> / <code>u19pwd</code>
-        </p>
         <button id="reset-db-btn" class="btn btn-link btn-block mt-4" style="text-align: center; color: var(--danger);">Resetovať lokálnu databázu (Vymazať cache)</button>
       </div>
     </div>
@@ -101,7 +97,10 @@
               <button id="prev-week-btn" class="btn btn-icon">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
               </button>
-              <h2 id="calendar-week-range" class="week-range-title">24. Jún – 30. Jún 2026</h2>
+              <div class="date-picker-wrapper" style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                <h2 id="calendar-week-range" class="week-range-title">24. Jún – 30. Jún 2026</h2>
+                <input type="date" id="calendar-date-picker" class="calendar-date-input" title="Vybrať konkrétny deň">
+              </div>
               <button id="next-week-btn" class="btn btn-icon">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
               </button>

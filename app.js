@@ -742,6 +742,17 @@ async function initDashboard() {
   document.getElementById('login-section').classList.add('hidden');
   document.getElementById('dashboard-section').classList.remove('hidden');
 
+  // Auto-default to Daily View on mobile screens for optimal lane width
+  if (window.innerWidth <= 768) {
+    state.currentView = 'day';
+    const dayBtn = document.getElementById('view-day-btn');
+    const weekBtn = document.getElementById('view-week-btn');
+    if (dayBtn && weekBtn) {
+      dayBtn.classList.add('active');
+      weekBtn.classList.remove('active');
+    }
+  }
+
   if (state.user) {
     document.getElementById('user-display-name').textContent = state.user.name;
     document.getElementById('user-display-role').textContent = state.user.role === 'admin' ? 'Administrátor' : 'Tréner';
@@ -840,6 +851,12 @@ async function refreshCalendar() {
   const range = getCalendarDateRange();
   try {
     state.reservations = await apiRequest(`/reservations?start=${range.start.toISOString()}&end=${range.end.toISOString()}`);
+    
+    const datePicker = document.getElementById('calendar-date-picker');
+    if (datePicker) {
+      datePicker.value = formatDateISO(state.currentDate);
+    }
+
     renderCalendarGrid();
     renderReservationsOverlay();
   } catch (err) {
@@ -1701,6 +1718,17 @@ document.getElementById('pitch-tab-training').addEventListener('click', () => {
 // Auth Submit & Reset DB
 document.getElementById('login-form').addEventListener('submit', handleLogin);
 document.getElementById('logout-btn').addEventListener('click', handleLogout);
+
+const datePicker = document.getElementById('calendar-date-picker');
+if (datePicker) {
+  datePicker.value = formatDateISO(state.currentDate);
+  datePicker.addEventListener('change', (e) => {
+    if (e.target.value) {
+      state.currentDate = new Date(`${e.target.value}T00:00:00`);
+      refreshCalendar();
+    }
+  });
+}
 
 document.getElementById('reset-db-btn').addEventListener('click', () => {
   if (confirm('Naozaj chcete resetovať celú lokálnu databázu a vymazať cache? Všetky vaše rezervácie budú vymazané.')) {
