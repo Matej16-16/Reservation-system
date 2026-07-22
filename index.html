@@ -18,9 +18,9 @@
   <section id="login-section" class="auth-section">
     <div class="auth-card">
       <div class="auth-header">
-        <div class="logo-badge">FK</div>
-        <h1>Rezervačný systém</h1>
-        <p>Prihláste sa pre prístup k rezerváciám ihrísk</p>
+        <img src="logo.jpg" alt="ŠK Junior Logo" class="app-logo-login">
+        <h1>ŠK Junior Ivanka pri Nitre</h1>
+        <p>Prihláste sa pre prístup k rezerváciám plôch</p>
       </div>
       <form id="login-form" class="auth-form">
         <div class="form-group">
@@ -32,6 +32,7 @@
           <input type="password" id="login-password" required placeholder="••••••••">
         </div>
         <button type="submit" class="btn btn-primary btn-block">Prihlásiť sa</button>
+        <button type="button" id="guest-login-btn" class="btn btn-secondary btn-block mt-4">Zobraziť obsadenosť ihriska (Bez prihlásenia)</button>
       </form>
       <div class="auth-footer">
         <button id="reset-db-btn" class="btn btn-link btn-block mt-4" style="text-align: center; color: var(--danger);">Resetovať lokálnu databázu (Vymazať cache)</button>
@@ -44,9 +45,9 @@
     <!-- Top Header -->
     <header class="app-header">
       <div class="header-left">
-        <div class="logo-badge">FK</div>
+        <img src="logo.jpg" alt="ŠK Junior Logo" class="app-logo-header">
         <div class="header-title-wrapper">
-          <span class="app-subtitle">FUTBALOVÝ KLUB</span>
+          <span class="app-subtitle">ŠK JUNIOR IVANKA PRI NITRE</span>
           <h1 class="app-title">Rezervácie plôch</h1>
         </div>
       </div>

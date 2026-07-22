@@ -755,7 +755,15 @@ async function initDashboard() {
 
   if (state.user) {
     document.getElementById('user-display-name').textContent = state.user.name;
-    document.getElementById('user-display-role').textContent = state.user.role === 'admin' ? 'Administrátor' : 'Tréner';
+    
+    const roleLabel = document.getElementById('user-display-role');
+    if (state.user.role === 'admin') {
+      roleLabel.textContent = 'Administrátor';
+    } else if (state.user.role === 'guest') {
+      roleLabel.textContent = 'Hosť (Iba čítanie)';
+    } else {
+      roleLabel.textContent = 'Tréner';
+    }
     
     const avatar = document.getElementById('user-avatar');
     avatar.textContent = state.user.name.charAt(0).toUpperCase();
@@ -768,6 +776,24 @@ async function initDashboard() {
     } else {
       adminToggleBtn.classList.add('hidden');
       document.getElementById('res-user-select-group').classList.add('hidden');
+    }
+
+    const logoutBtn = document.getElementById('logout-btn');
+    if (state.user.role === 'guest') {
+      logoutBtn.textContent = 'Prihlásiť sa';
+      logoutBtn.className = 'btn btn-primary';
+    } else {
+      logoutBtn.textContent = 'Odhlásiť sa';
+      logoutBtn.className = 'btn btn-danger-outline';
+    }
+
+    const mobileFab = document.getElementById('mobile-add-res-btn');
+    if (mobileFab) {
+      if (state.user.role === 'guest') {
+        mobileFab.style.setProperty('display', 'none', 'important');
+      } else {
+        mobileFab.style.removeProperty('display');
+      }
     }
   }
 
@@ -1112,7 +1138,7 @@ function renderReservationsOverlay() {
       <div class="res-card-field">${fieldName}</div>
     `;
 
-    const isOwner = state.user && res.user_id === state.user.id;
+    const isOwner = state.user && state.user.role !== 'guest' && res.user_id === state.user.id;
     const isAdmin = state.user && state.user.role === 'admin';
     
     if (isAdmin || isOwner) {
@@ -1122,7 +1148,7 @@ function renderReservationsOverlay() {
       });
     } else {
       card.style.cursor = 'not-allowed';
-      card.title = `Rezervácia tímu ${res.user_name}`;
+      card.title = state.user && state.user.role === 'guest' ? `Rezervácia tímu ${res.user_name} (Hosť nemôže upravovať)` : `Rezervácia tímu ${res.user_name}`;
     }
 
     overlay.appendChild(card);
@@ -1133,6 +1159,7 @@ function renderReservationsOverlay() {
 // 10. DRAG & DROP / RANGE SELECTION
 // ==========================================================================
 function startDragSelection(e, colIdx, slotIdx) {
+  if (state.user && state.user.role === 'guest') return;
   if (e.button !== 0) return;
   isDragging = true;
   dragStartColIdx = colIdx;
@@ -1718,6 +1745,17 @@ document.getElementById('pitch-tab-training').addEventListener('click', () => {
 // Auth Submit & Reset DB
 document.getElementById('login-form').addEventListener('submit', handleLogin);
 document.getElementById('logout-btn').addEventListener('click', handleLogout);
+
+const guestLoginBtn = document.getElementById('guest-login-btn');
+if (guestLoginBtn) {
+  guestLoginBtn.addEventListener('click', () => {
+    state.token = 'guest-token';
+    state.user = { id: 'u-guest', name: 'Návštevník', email: 'guest@skjunior.sk', role: 'guest', color: '#64748b' };
+    localStorage.setItem('token', state.token);
+    localStorage.setItem('user', JSON.stringify(state.user));
+    initDashboard();
+  });
+}
 
 const datePicker = document.getElementById('calendar-date-picker');
 if (datePicker) {

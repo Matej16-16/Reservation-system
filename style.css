@@ -1685,6 +1685,30 @@ body {
   }
 }
 
+/* Logo Image Customizations */
+.app-logo-login {
+  width: 96px;
+  height: 96px;
+  object-fit: contain;
+  margin-bottom: 1rem;
+  border-radius: 50%;
+  border: 2px solid var(--border-color);
+  background-color: #ffffff;
+  padding: 4px;
+}
+
+.app-logo-header {
+  width: 44px;
+  height: 44px;
+  object-fit: contain;
+  border-radius: 50%;
+  border: 2px solid var(--border-color);
+  background-color: #ffffff;
+  padding: 2px;
+  margin-right: 0.5rem;
+}
+
+
 
 
 
