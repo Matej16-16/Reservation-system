@@ -1410,7 +1410,13 @@ body {
 /* Thicker right border to separate days */
 .lane-sub-header.end-of-day,
 .calendar-cell.end-of-day {
-  border-right: 1px solid var(--border-color) !important;
+  border-right: 3px solid rgba(255, 255, 255, 0.3) !important;
+}
+
+/* Visual separator between Half A and Half B (separating A2 and B1) */
+.lane-sub-header.half-separator,
+.calendar-cell.half-separator {
+  border-right: 2px dashed rgba(255, 255, 255, 0.2) !important;
 }
 
 /* Make sure the main time axis spans the two header rows */

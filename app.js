@@ -956,7 +956,7 @@ function renderCalendarGrid() {
   for (let dIdx = 0; dIdx < numDays; dIdx++) {
     lanes.forEach((laneName, lIdx) => {
       const laneHeader = document.createElement('div');
-      laneHeader.className = `lane-sub-header ${lIdx === 3 ? 'end-of-day' : ''}`;
+      laneHeader.className = `lane-sub-header ${lIdx === 3 ? 'end-of-day' : ''} ${lIdx === 1 ? 'half-separator' : ''}`;
       const colIdx = 2 + dIdx * 4 + lIdx;
       laneHeader.style.gridColumn = `${colIdx}`;
       laneHeader.textContent = laneName;
@@ -1010,6 +1010,9 @@ function renderCalendarGrid() {
       
       if (laneIdx === 3) {
         cell.classList.add('end-of-day');
+      }
+      if (laneIdx === 1) {
+        cell.classList.add('half-separator');
       }
       
       cell.setAttribute('data-col-idx', colIdx);
@@ -1140,15 +1143,17 @@ function renderReservationsOverlay() {
 
     const isOwner = state.user && state.user.role !== 'guest' && res.user_id === state.user.id;
     const isAdmin = state.user && state.user.role === 'admin';
+    const isGuest = state.user && state.user.role === 'guest';
     
-    if (isAdmin || isOwner) {
+    if (isAdmin || isOwner || isGuest) {
       card.addEventListener('click', (e) => {
         e.stopPropagation();
         openReservationModal(res);
       });
+      card.style.cursor = 'pointer';
     } else {
       card.style.cursor = 'not-allowed';
-      card.title = state.user && state.user.role === 'guest' ? `Rezervácia tímu ${res.user_name} (Hosť nemôže upravovať)` : `Rezervácia tímu ${res.user_name}`;
+      card.title = `Rezervácia tímu ${res.user_name}`;
     }
 
     overlay.appendChild(card);
@@ -1171,15 +1176,22 @@ function startDragSelection(e, colIdx, slotIdx) {
 
 function handleDragEnter(colIdx, slotIdx) {
   if (!isDragging) return;
-  if (colIdx !== dragStartColIdx) return;
+
+  const startDayIdx = Math.floor(dragStartColIdx / 4);
+  const currentDayIdx = Math.floor(colIdx / 4);
+  if (currentDayIdx !== startDayIdx) return; // restrict drag selection to a single day maximum
 
   clearDragSelectionStyles();
   
-  const minIdx = Math.min(dragStartSlotIdx, slotIdx);
-  const maxIdx = Math.max(dragStartSlotIdx, slotIdx);
+  const minCol = Math.min(dragStartColIdx, colIdx);
+  const maxCol = Math.max(dragStartColIdx, colIdx);
+  const minSlot = Math.min(dragStartSlotIdx, slotIdx);
+  const maxSlot = Math.max(dragStartSlotIdx, slotIdx);
 
-  for (let i = minIdx; i <= maxIdx; i++) {
-    highlightCell(colIdx, i);
+  for (let c = minCol; c <= maxCol; c++) {
+    for (let s = minSlot; s <= maxSlot; s++) {
+      highlightCell(c, s);
+    }
   }
 }
 
@@ -1203,36 +1215,55 @@ function finalizeDragSelection() {
   const selectedCells = document.querySelectorAll('.calendar-cell.drag-selecting');
   if (selectedCells.length === 0) return;
 
-  let minIdx = 9999;
-  let maxIdx = -1;
+  let minCol = 9999;
+  let maxCol = -1;
+  let minSlot = 9999;
+  let maxSlot = -1;
 
   selectedCells.forEach(cell => {
-    const sIdx = parseInt(cell.getAttribute('data-slot-idx'));
-    if (sIdx < minIdx) minIdx = sIdx;
-    if (sIdx > maxIdx) maxIdx = sIdx;
+    const col = parseInt(cell.getAttribute('data-col-idx'));
+    const slot = parseInt(cell.getAttribute('data-slot-idx'));
+    if (col < minCol) minCol = col;
+    if (col > maxCol) maxCol = col;
+    if (slot < minSlot) minSlot = slot;
+    if (slot > maxSlot) maxSlot = slot;
   });
 
   clearDragSelectionStyles();
 
   const firstCell = selectedCells[0];
   const dayIdx = parseInt(firstCell.getAttribute('data-day-idx'));
-  const fieldId = firstCell.getAttribute('data-field-id');
-
   const days = getDaysOfCurrentView();
   const selectedDate = days[dayIdx];
-  const startSlotStr = TIME_SLOTS[minIdx];
   
-  let endSlotStr;
-  if (maxIdx + 1 < TIME_SLOTS.length) {
-    endSlotStr = TIME_SLOTS[maxIdx + 1];
-  } else {
-    endSlotStr = `${END_HOUR}:00`;
+  const startSlotStr = TIME_SLOTS[minSlot];
+  let endSlotStr = maxSlot + 1 < TIME_SLOTS.length ? TIME_SLOTS[maxSlot + 1] : `${END_HOUR}:00`;
+
+  // Map selected column spans to matching Pitch Quarter, Half, or Full
+  const laneStartIdx = minCol % 4;
+  const laneEndIdx = maxCol % 4;
+  const laneSpan = laneEndIdx - laneStartIdx + 1;
+  
+  const modePrefix = state.activeFieldMode === 'training' ? 'training' : 'main';
+  let resolvedFieldId = `${modePrefix}_quarter_a1`;
+
+  if (laneSpan >= 4) {
+    resolvedFieldId = `${modePrefix}_full`;
+  } else if (laneSpan === 2 || laneSpan === 3) {
+    if (laneStartIdx <= 1) {
+      resolvedFieldId = `${modePrefix}_half_a`;
+    } else {
+      resolvedFieldId = `${modePrefix}_half_b`;
+    }
+  } else if (laneSpan === 1) {
+    const suffixes = ['_quarter_a1', '_quarter_a2', '_quarter_b1', '_quarter_b2'];
+    resolvedFieldId = modePrefix + suffixes[laneStartIdx];
   }
 
   openReservationModal({
     start_time: combineDateAndTimeISO(selectedDate, startSlotStr),
     end_time: combineDateAndTimeISO(selectedDate, endSlotStr),
-    field_id: fieldId
+    field_id: resolvedFieldId
   });
 }
 
@@ -1284,18 +1315,48 @@ function openReservationModal(res = null) {
   form.reset();
   populateTimeSelects();
 
+  const isGuest = state.user && state.user.role === 'guest';
+  const inputs = ['res-field-id', 'res-user-id', 'res-event-type', 'res-opponent', 'res-note', 'res-date', 'res-start-time', 'res-end-time'];
+  inputs.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.disabled = isGuest;
+  });
+
+  const saveBtn = form.querySelector('button[type="submit"]');
+  if (saveBtn) {
+    if (isGuest) {
+      saveBtn.classList.add('hidden');
+    } else {
+      saveBtn.classList.remove('hidden');
+    }
+  }
+
+  const cancelBtn = document.getElementById('cancel-res-btn');
+  if (cancelBtn) {
+    if (isGuest) {
+      cancelBtn.textContent = 'Zavrieť';
+    } else {
+      cancelBtn.textContent = 'Zrušiť';
+    }
+  }
+
   if (res && res.id) {
-    title.textContent = 'Upraviť rezerváciu plochy';
     document.getElementById('res-id').value = res.id;
     document.getElementById('res-field-id').value = res.field_id;
     
-    if (state.user && state.user.role === 'admin') {
-      deleteBtn.classList.remove('hidden');
-      document.getElementById('res-user-id').value = res.user_id;
-    } else if (state.user && res.user_id === state.user.id) {
-      deleteBtn.classList.remove('hidden');
-    } else {
+    if (isGuest) {
+      title.textContent = 'Detail rezervácie plochy (Iba čítanie)';
       deleteBtn.classList.add('hidden');
+    } else {
+      title.textContent = 'Upraviť rezerváciu plochy';
+      if (state.user && state.user.role === 'admin') {
+        deleteBtn.classList.remove('hidden');
+        document.getElementById('res-user-id').value = res.user_id;
+      } else if (state.user && res.user_id === state.user.id) {
+        deleteBtn.classList.remove('hidden');
+      } else {
+        deleteBtn.classList.add('hidden');
+      }
     }
 
     const localStart = new Date(res.start_time);
