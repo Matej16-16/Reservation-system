@@ -419,7 +419,7 @@
 
   <!-- 5. PITCH CLOSURE MODAL (ADMIN ONLY) -->
   <div id="closure-modal" class="modal-overlay hidden">
-    <div class="modal-card">
+    <div class="modal-card modal-card-lg">
       <div class="modal-header">
         <h3 id="closure-modal-title">⚠️ Nastaviť uzáveru plochy</h3>
         <button id="close-closure-modal-btn" class="btn-close">&times;</button>
@@ -427,46 +427,61 @@
       <form id="closure-form">
         <input type="hidden" id="closure-id">
 
-        <div class="form-group">
-          <label for="closure-pitch-select">Ihrisko / Plocha</label>
-          <select id="closure-pitch-select" required>
-            <option value="training" selected>Tréningové ihrisko</option>
-            <option value="main">Hlavné ihrisko</option>
-            <option value="turf">Umelá tráva - škola</option>
-            <option value="turf_park">Umelá tráva - park</option>
-            <option value="gym">Telocvičňa</option>
-          </select>
-        </div>
-
-        <div class="form-group" id="closure-subpart-group">
-          <label for="closure-part-select">Rozsah plochy (časť)</label>
-          <select id="closure-part-select">
-            <option value="full" selected>Celé ihrisko</option>
-            <option value="half_a">Polovica A (A1 + A2)</option>
-            <option value="half_b">Polovica B (B1 + B2)</option>
-            <option value="quarter_a1">Štvrtina A1</option>
-            <option value="quarter_a2">Štvrtina A2</option>
-            <option value="quarter_b1">Štvrtina B1</option>
-            <option value="quarter_b2">Štvrtina B2</option>
-          </select>
-        </div>
-
         <div class="form-row">
-          <div class="form-group">
-            <label for="closure-date">Dátum</label>
-            <input type="date" id="closure-date" required>
+          <div class="form-group" style="flex: 1;">
+            <label for="closure-pitch-select">Ihrisko / Plocha</label>
+            <select id="closure-pitch-select" required>
+              <option value="training" selected>Tréningové ihrisko</option>
+              <option value="main">Hlavné ihrisko</option>
+              <option value="turf">Umelá tráva - škola</option>
+              <option value="turf_park">Umelá tráva - park</option>
+              <option value="gym">Telocvičňa</option>
+            </select>
+          </div>
+
+          <div class="form-group" id="closure-subpart-group" style="flex: 1;">
+            <label for="closure-part-select">Rozsah plochy (časť)</label>
+            <select id="closure-part-select">
+              <option value="full" selected>Celé ihrisko</option>
+              <option value="half_a">Polovica A (A1 + A2)</option>
+              <option value="half_b">Polovica B (B1 + B2)</option>
+              <option value="quarter_a1">Štvrtina A1</option>
+              <option value="quarter_a2">Štvrtina A2</option>
+              <option value="quarter_b1">Štvrtina B1</option>
+              <option value="quarter_b2">Štvrtina B2</option>
+            </select>
           </div>
         </div>
 
+        <!-- Date Range: From Date & To Date (Supports multi-day periods) -->
         <div class="form-row">
-          <div class="form-group">
+          <div class="form-group" style="flex: 1;">
+            <label for="closure-start-date">Dátum od</label>
+            <input type="date" id="closure-start-date" required>
+          </div>
+          <div class="form-group" style="flex: 1;">
+            <label for="closure-end-date">Dátum do</label>
+            <input type="date" id="closure-end-date" required>
+          </div>
+        </div>
+
+        <!-- Time Range: From Time & To Time -->
+        <div class="form-row">
+          <div class="form-group" style="flex: 1;">
             <label for="closure-start-time">Čas od</label>
             <select id="closure-start-time" required></select>
           </div>
-          <div class="form-group">
+          <div class="form-group" style="flex: 1;">
             <label for="closure-end-time">Čas do</label>
             <select id="closure-end-time" required></select>
           </div>
+        </div>
+
+        <div class="form-group" style="margin-top: -0.25rem; margin-bottom: 0.75rem;">
+          <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-weight: normal; font-size: 0.82rem; user-select: none;">
+            <input type="checkbox" id="closure-all-day" checked style="width: 16px; height: 16px; accent-color: var(--danger);">
+            <span>Celodenná uzávera (všetky tréningové hodiny 08:00 – 21:00)</span>
+          </label>
         </div>
 
         <div class="form-group">
@@ -483,7 +498,7 @@
           <input type="text" id="closure-note" placeholder="Opíšte dôvod uzávery">
         </div>
 
-        <div class="modal-footer">
+        <div class="modal-footer" style="margin-top: 1rem;">
           <button type="button" id="delete-closure-btn" class="btn btn-danger hidden">Zmazať uzáveru</button>
           <div class="modal-footer-actions">
             <button type="button" id="cancel-closure-btn" class="btn btn-secondary">Zrušiť</button>
@@ -491,9 +506,29 @@
           </div>
         </div>
       </form>
+
+      <!-- Table overview of all defined closures -->
+      <div class="modal-closures-table-wrapper">
+        <h4 style="font-size: 0.9rem; font-weight: 700; margin-bottom: 0.5rem; color: #f87171;">📋 Prehľad zadaných uzáver</h4>
+        <div class="table-responsive" style="max-height: 220px; overflow-y: auto;">
+          <table class="closures-table">
+            <thead>
+              <tr>
+                <th>Plocha</th>
+                <th>Obdobie (Od – Do)</th>
+                <th>Dôvod</th>
+                <th style="text-align: right;">Akcia</th>
+              </tr>
+            </thead>
+            <tbody id="modal-closures-table-body">
+              <!-- Rendered dynamically -->
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   </div>
 
-  <script type="module" src="app.js?v=2.2"></script>
+  <script type="module" src="app.js?v=2.4"></script>
 </body>
 </html>

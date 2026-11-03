@@ -1848,6 +1848,45 @@ body {
   box-shadow: 0 4px 15px rgba(239, 68, 68, 0.45);
 }
 
+/* Large Modal Card & Closures Table inside Modal */
+.modal-card.modal-card-lg {
+  max-width: 660px;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.modal-closures-table-wrapper {
+  margin-top: 1.5rem;
+  border-top: 1px solid var(--border-color);
+  padding-top: 1rem;
+}
+
+.closures-table {
+  width: 100%;
+  font-size: 0.78rem;
+  border-collapse: collapse;
+}
+
+.closures-table th {
+  padding: 8px 10px;
+  background-color: rgba(255, 255, 255, 0.03);
+  color: var(--text-muted);
+  font-weight: 600;
+  text-align: left;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.closures-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  vertical-align: middle;
+}
+
+.closures-table tr:hover td {
+  background-color: rgba(255, 255, 255, 0.02);
+}
+
+
 
 
 

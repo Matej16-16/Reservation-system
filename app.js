@@ -1377,89 +1377,101 @@ function renderReservationsOverlay() {
   });
 
   activeClosures.forEach(c => {
-    const localStart = new Date(c.start_time);
-    const localEnd = new Date(c.end_time);
-    const dateStr = formatDateISO(localStart);
-
-    const dayColumnIdx = daysStrMap.indexOf(dateStr);
-    if (dayColumnIdx === -1) return;
-
-    const startHour = localStart.getHours();
-    const startMin = localStart.getMinutes();
-    const endHour = localEnd.getHours();
-    const endMin = localEnd.getMinutes();
-
-    const calendarStartMins = START_HOUR * 60;
-    const startMins = startHour * 60 + startMin - calendarStartMins;
-    const endMins = endHour * 60 + endMin - calendarStartMins;
-
-    const calendarHeightMins = (END_HOUR - START_HOUR) * 60;
-    const clampedStartMins = Math.max(0, Math.min(calendarHeightMins, startMins));
-    const clampedEndMins = Math.max(0, Math.min(calendarHeightMins, endMins));
-
-    if (clampedStartMins >= clampedEndMins) return;
-
-    const top = (clampedStartMins / 30) * SLOT_HEIGHT;
-    const height = ((clampedEndMins - clampedStartMins) / 30) * SLOT_HEIGHT;
-
-    let laneOffset = 0;
-    let laneSpan = 1;
-
-    if (isDividedPitch) {
-      const fieldId = c.field_id || '';
-      if (fieldId.endsWith('_quarter_a1')) {
-        laneOffset = 0; laneSpan = 1;
-      } else if (fieldId.endsWith('_quarter_a2')) {
-        laneOffset = 1; laneSpan = 1;
-      } else if (fieldId.endsWith('_quarter_b1')) {
-        laneOffset = 2; laneSpan = 1;
-      } else if (fieldId.endsWith('_quarter_b2')) {
-        laneOffset = 3; laneSpan = 1;
-      } else if (fieldId.endsWith('_half_a')) {
-        laneOffset = 0; laneSpan = 2;
-      } else if (fieldId.endsWith('_half_b')) {
-        laneOffset = 2; laneSpan = 2;
-      } else if (fieldId.endsWith('_full')) {
-        laneOffset = 0; laneSpan = 4;
-      }
-    } else {
-      laneOffset = 0;
-      laneSpan = 1;
-    }
-
-    const colStart = dayColumnIdx * lanesPerDay + laneOffset;
-    const leftPercent = (colStart / totalGridCols) * 100;
-    const widthPercent = (laneSpan / totalGridCols) * 100;
-
-    const card = document.createElement('div');
-    card.className = 'reservation-card is-closure';
-    card.style.top = `${top}px`;
-    card.style.height = `${height}px`;
-    card.style.left = `calc(${leftPercent}% + 2px)`;
-    card.style.width = `calc(${widthPercent}% - 4px)`;
-
+    const closureStart = new Date(c.start_time);
+    const closureEnd = new Date(c.end_time);
     const formatTimeStr = (d) => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
     const fieldName = state.fieldsMap[c.field_id] ? state.fieldsMap[c.field_id].name : c.field_id;
 
-    card.title = `⚠️ Uzávera: ${c.reason || 'Uzávera'}${c.note ? ' - ' + c.note : ''}\nČas: ${formatTimeStr(localStart)} - ${formatTimeStr(localEnd)} (${formatDisplayDate(localStart)})\nPlocha: ${fieldName}`;
+    // A closure can span multiple days - iterate over all days displayed in the current week view
+    days.forEach((day, dayColumnIdx) => {
+      const dayStart = new Date(day);
+      dayStart.setHours(START_HOUR, 0, 0, 0);
+      const dayEnd = new Date(day);
+      dayEnd.setHours(END_HOUR, 0, 0, 0);
 
-    card.innerHTML = `
-      <div class="res-card-header">
-        <span class="res-card-coach" style="font-weight: 700; color: #dc2626;">⚠️ ${c.reason || 'Uzávera'}</span>
-        <span class="res-card-time" style="font-size: 0.6rem;">${formatTimeStr(localStart)} - ${formatTimeStr(localEnd)}</span>
-      </div>
-      <div class="res-card-field" style="color: #991b1b; font-weight: 600;">${c.note ? c.note : fieldName}</div>
-    `;
+      // Check if closure intersects this calendar day's visible training hours
+      if (closureEnd.getTime() <= dayStart.getTime() || closureStart.getTime() >= dayEnd.getTime()) {
+        return;
+      }
 
-    if (state.user && state.user.role === 'admin') {
-      card.style.cursor = 'pointer';
-      card.addEventListener('click', (e) => {
-        e.stopPropagation();
-        openClosureModal(c);
-      });
-    }
+      const effStart = new Date(Math.max(dayStart.getTime(), closureStart.getTime()));
+      const effEnd = new Date(Math.min(dayEnd.getTime(), closureEnd.getTime()));
 
-    overlay.appendChild(card);
+      const calendarStartMins = START_HOUR * 60;
+      const startMins = effStart.getHours() * 60 + effStart.getMinutes() - calendarStartMins;
+      const endMins = effEnd.getHours() * 60 + effEnd.getMinutes() - calendarStartMins;
+
+      const calendarHeightMins = (END_HOUR - START_HOUR) * 60;
+      const clampedStartMins = Math.max(0, Math.min(calendarHeightMins, startMins));
+      const clampedEndMins = Math.max(0, Math.min(calendarHeightMins, endMins));
+
+      if (clampedStartMins >= clampedEndMins) return;
+
+      const top = (clampedStartMins / 30) * SLOT_HEIGHT;
+      const height = ((clampedEndMins - clampedStartMins) / 30) * SLOT_HEIGHT;
+
+      let laneOffset = 0;
+      let laneSpan = 1;
+
+      if (isDividedPitch) {
+        const fieldId = c.field_id || '';
+        if (fieldId.endsWith('_quarter_a1')) {
+          laneOffset = 0; laneSpan = 1;
+        } else if (fieldId.endsWith('_quarter_a2')) {
+          laneOffset = 1; laneSpan = 1;
+        } else if (fieldId.endsWith('_quarter_b1')) {
+          laneOffset = 2; laneSpan = 1;
+        } else if (fieldId.endsWith('_quarter_b2')) {
+          laneOffset = 3; laneSpan = 1;
+        } else if (fieldId.endsWith('_half_a')) {
+          laneOffset = 0; laneSpan = 2;
+        } else if (fieldId.endsWith('_half_b')) {
+          laneOffset = 2; laneSpan = 2;
+        } else if (fieldId.endsWith('_full')) {
+          laneOffset = 0; laneSpan = 4;
+        }
+      } else {
+        laneOffset = 0;
+        laneSpan = 1;
+      }
+
+      const colStart = dayColumnIdx * lanesPerDay + laneOffset;
+      const leftPercent = (colStart / totalGridCols) * 100;
+      const widthPercent = (laneSpan / totalGridCols) * 100;
+
+      const card = document.createElement('div');
+      card.className = 'reservation-card is-closure';
+      card.style.top = `${top}px`;
+      card.style.height = `${height}px`;
+      card.style.left = `calc(${leftPercent}% + 2px)`;
+      card.style.width = `calc(${widthPercent}% - 4px)`;
+
+      const sDateStr = `${closureStart.getDate()}.${closureStart.getMonth() + 1}.`;
+      const eDateStr = `${closureEnd.getDate()}.${closureEnd.getMonth() + 1}.`;
+      const fullRangeStr = formatDateISO(closureStart) === formatDateISO(closureEnd)
+        ? `${sDateStr} ${formatTimeStr(closureStart)} - ${formatTimeStr(closureEnd)}`
+        : `${sDateStr} ${formatTimeStr(closureStart)} - ${eDateStr} ${formatTimeStr(closureEnd)}`;
+
+      card.title = `⚠️ Uzávera: ${c.reason || 'Uzávera'}${c.note ? ' - ' + c.note : ''}\nČas: ${fullRangeStr}\nPlocha: ${fieldName}`;
+
+      card.innerHTML = `
+        <div class="res-card-header">
+          <span class="res-card-coach" style="font-weight: 700; color: #dc2626;">⚠️ ${c.reason || 'Uzávera'}</span>
+          <span class="res-card-time" style="font-size: 0.6rem;">${formatTimeStr(effStart)} - ${formatTimeStr(effEnd)}</span>
+        </div>
+        <div class="res-card-field" style="color: #991b1b; font-weight: 600;">${c.note ? c.note : fieldName}</div>
+      `;
+
+      if (state.user && state.user.role === 'admin') {
+        card.style.cursor = 'pointer';
+        card.addEventListener('click', (e) => {
+          e.stopPropagation();
+          openClosureModal(c);
+        });
+      }
+
+      overlay.appendChild(card);
+    });
   });
 }
 
@@ -2137,7 +2149,12 @@ function renderSidebarClosures() {
 
     const fieldName = state.fieldsMap[c.field_id] ? state.fieldsMap[c.field_id].name : c.field_id;
     const formatTime = (d) => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-    const dateFormatted = `${sDate.getDate()}.${sDate.getMonth() + 1}.`;
+    const sDateStr = `${sDate.getDate()}.${sDate.getMonth() + 1}.`;
+    const eDateStr = `${eDate.getDate()}.${eDate.getMonth() + 1}.`;
+    const isSameDay = formatDateISO(sDate) === formatDateISO(eDate);
+    const timeFormatted = isSameDay 
+      ? `${sDateStr} ${formatTime(sDate)} – ${formatTime(eDate)}`
+      : `${sDateStr} ${formatTime(sDate)} – ${eDateStr} ${formatTime(eDate)}`;
 
     item.innerHTML = `
       <div class="closure-item-header">
@@ -2145,7 +2162,7 @@ function renderSidebarClosures() {
         ${isAdmin ? `<button type="button" class="closure-delete-btn" title="Odstrániť uzáveru" data-id="${c.id}">&times;</button>` : ''}
       </div>
       <div class="closure-item-pitch">${fieldName}</div>
-      <div class="closure-item-time">${dateFormatted} ${formatTime(sDate)} – ${formatTime(eDate)}</div>
+      <div class="closure-item-time">${timeFormatted}</div>
       ${c.note ? `<div class="closure-item-note">${c.note}</div>` : ''}
     `;
 
@@ -2165,6 +2182,55 @@ function renderSidebarClosures() {
   });
 }
 
+function renderModalClosuresTable() {
+  const tbody = document.getElementById('modal-closures-table-body');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+
+  const closures = [...(state.closures || [])].sort((a, b) => new Date(b.start_time) - new Date(a.start_time));
+  if (closures.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: var(--text-muted); padding: 1rem;">Žiadne zadané uzávery</td></tr>';
+    return;
+  }
+
+  const formatTime = (d) => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+
+  closures.forEach(c => {
+    const sDate = new Date(c.start_time);
+    const eDate = new Date(c.end_time);
+    const sDateStr = `${sDate.getDate()}.${sDate.getMonth() + 1}.`;
+    const eDateStr = `${eDate.getDate()}.${eDate.getMonth() + 1}.`;
+    const isSameDay = formatDateISO(sDate) === formatDateISO(eDate);
+    const periodStr = isSameDay
+      ? `${sDateStr} ${formatTime(sDate)} – ${formatTime(eDate)}`
+      : `${sDateStr} ${formatTime(sDate)} – ${eDateStr} ${formatTime(eDate)}`;
+
+    const fieldName = state.fieldsMap[c.field_id] ? state.fieldsMap[c.field_id].name : c.field_id;
+    const reasonText = c.note ? `${c.reason} (${c.note})` : (c.reason || 'Uzávera');
+
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td style="font-weight: 600;">${fieldName}</td>
+      <td style="font-size: 0.78rem;">${periodStr}</td>
+      <td><span class="closure-reason-tag" style="font-size: 0.7rem;">${reasonText}</span></td>
+      <td style="text-align: right; white-space: nowrap;">
+        <button type="button" class="btn btn-secondary btn-sm edit-modal-closure-btn" style="padding: 0.2rem 0.5rem; font-size: 0.75rem; margin-right: 0.25rem;">Upraviť</button>
+        <button type="button" class="btn btn-danger btn-sm del-modal-closure-btn" style="padding: 0.2rem 0.5rem; font-size: 0.75rem;">&times;</button>
+      </td>
+    `;
+
+    tr.querySelector('.edit-modal-closure-btn').addEventListener('click', () => {
+      openClosureModal(c);
+    });
+
+    tr.querySelector('.del-modal-closure-btn').addEventListener('click', () => {
+      deleteClosure(c.id);
+    });
+
+    tbody.appendChild(tr);
+  });
+}
+
 function openClosureModal(closureObj = null) {
   const modal = document.getElementById('closure-modal');
   const form = document.getElementById('closure-form');
@@ -2178,6 +2244,11 @@ function openClosureModal(closureObj = null) {
   const pitchSelect = document.getElementById('closure-pitch-select');
   const subpartGroup = document.getElementById('closure-subpart-group');
   const partSelect = document.getElementById('closure-part-select');
+  const startDateInput = document.getElementById('closure-start-date');
+  const endDateInput = document.getElementById('closure-end-date');
+  const startTimeSelect = document.getElementById('closure-start-time');
+  const endTimeSelect = document.getElementById('closure-end-time');
+  const allDayCheckbox = document.getElementById('closure-all-day');
   const reasonSelect = document.getElementById('closure-reason');
   const noteGroup = document.getElementById('closure-note-group');
   const noteInput = document.getElementById('closure-note');
@@ -2201,8 +2272,27 @@ function openClosureModal(closureObj = null) {
     }
   }
 
+  function handleAllDayToggle() {
+    if (allDayCheckbox.checked) {
+      startTimeSelect.value = '08:00';
+      endTimeSelect.value = '21:00';
+      startTimeSelect.disabled = true;
+      endTimeSelect.disabled = true;
+    } else {
+      startTimeSelect.disabled = false;
+      endTimeSelect.disabled = false;
+    }
+  }
+
   pitchSelect.onchange = updateSubpartVisibility;
   reasonSelect.onchange = updateReasonVisibility;
+  allDayCheckbox.onchange = handleAllDayToggle;
+
+  startDateInput.onchange = () => {
+    if (endDateInput.value < startDateInput.value) {
+      endDateInput.value = startDateInput.value;
+    }
+  };
 
   if (closureObj && closureObj.id) {
     title.textContent = '⚠️ Upraviť uzáveru plochy';
@@ -2227,9 +2317,15 @@ function openClosureModal(closureObj = null) {
     const sDate = new Date(closureObj.start_time);
     const eDate = new Date(closureObj.end_time);
 
-    document.getElementById('closure-date').value = formatDateISO(sDate);
-    document.getElementById('closure-start-time').value = formatTimePadding(sDate);
-    document.getElementById('closure-end-time').value = formatTimePadding(eDate);
+    startDateInput.value = formatDateISO(sDate);
+    endDateInput.value = formatDateISO(eDate);
+    startTimeSelect.value = formatTimePadding(sDate);
+    endTimeSelect.value = formatTimePadding(eDate);
+
+    const isAllDay = (formatTimePadding(sDate) === '08:00' && formatTimePadding(eDate) === '21:00');
+    allDayCheckbox.checked = isAllDay;
+    handleAllDayToggle();
+
     reasonSelect.value = closureObj.reason || 'Údržba';
     noteInput.value = closureObj.note || '';
   } else {
@@ -2243,15 +2339,21 @@ function openClosureModal(closureObj = null) {
     else if (state.activeFieldMode === 'turf_park') pitchSelect.value = 'turf_park';
     else if (state.activeFieldMode === 'gym') pitchSelect.value = 'gym';
 
-    document.getElementById('closure-date').value = formatDateISO(state.currentDate);
-    document.getElementById('closure-start-time').value = '08:00';
-    document.getElementById('closure-end-time').value = '21:00';
+    const currentIso = formatDateISO(state.currentDate);
+    startDateInput.value = currentIso;
+    endDateInput.value = currentIso;
+    startTimeSelect.value = '08:00';
+    endTimeSelect.value = '21:00';
+    allDayCheckbox.checked = true;
+    handleAllDayToggle();
+
     reasonSelect.value = 'Údržba';
     noteInput.value = '';
   }
 
   updateSubpartVisibility();
   updateReasonVisibility();
+  renderModalClosuresTable();
   modal.classList.remove('hidden');
 }
 
@@ -2292,17 +2394,18 @@ async function handleClosureSubmit(e) {
   const id = document.getElementById('closure-id').value;
   const pitchVal = document.getElementById('closure-pitch-select').value;
   const partVal = document.getElementById('closure-part-select').value;
-  const dateStr = document.getElementById('closure-date').value;
+  const startDateStr = document.getElementById('closure-start-date').value;
+  const endDateStr = document.getElementById('closure-end-date').value;
   const startStr = document.getElementById('closure-start-time').value;
   const endStr = document.getElementById('closure-end-time').value;
   const reason = document.getElementById('closure-reason').value;
   const note = document.getElementById('closure-note').value.trim();
 
-  const startDate = new Date(`${dateStr}T${startStr}:00`);
-  const endDate = new Date(`${dateStr}T${endStr}:00`);
+  const startDate = new Date(`${startDateStr}T${startStr}:00`);
+  const endDate = new Date(`${endDateStr}T${endStr}:00`);
 
   if (startDate.getTime() >= endDate.getTime()) {
-    showToast('Neplatný čas', 'Koniec uzávery musí byť neskôr ako začiatok.', 'error');
+    showToast('Neplatný termín', 'Koniec uzávery musí byť neskôr ako začiatok.', 'error');
     return;
   }
 
@@ -2357,7 +2460,15 @@ async function deleteClosure(id = null) {
   try {
     await apiRequest(`/closures/${closureId}`, { method: 'DELETE' });
     showToast('Uzávera zrušená', 'Uzávera plochy bola úspešne odstránená.');
-    closeClosureModal();
+    const modal = document.getElementById('closure-modal');
+    if (modal && !modal.classList.contains('hidden')) {
+      if (document.getElementById('closure-id').value === closureId) {
+        openClosureModal(null);
+      } else {
+        state.closures = await apiRequest('/closures');
+        renderModalClosuresTable();
+      }
+    }
     refreshCalendar();
   } catch (err) {
     showToast('Chyba zrušenia', err.message, 'error');
