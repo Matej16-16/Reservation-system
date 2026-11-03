@@ -1066,9 +1066,26 @@ body {
   color: var(--primary-hover);
 }
 
-.training-mini, .main-mini {
+.training-mini, .main-mini, .turf-mini, .gym-mini {
   display: flex;
   flex-direction: column;
+}
+.turf-mini, .gym-mini {
+  justify-content: center;
+  align-items: center;
+  padding: 0.6rem 0.35rem;
+}
+.mini-single-badge {
+  font-size: 0.62rem;
+  background-color: rgba(255, 255, 255, 0.06);
+  border-radius: var(--border-radius-sm);
+  padding: 0.2rem 0.5rem;
+  margin-top: 0.25rem;
+  color: var(--text-muted);
+}
+.mini-pitch-card.active .mini-single-badge {
+  background-color: rgba(16, 185, 129, 0.25);
+  color: var(--primary-hover);
 }
 .mini-label {
   font-size: 0.6rem;
@@ -1340,7 +1357,9 @@ body {
   border: 1px solid var(--border-color);
   padding: 3px;
   border-radius: var(--border-radius-md);
-  margin-left: 1.5rem;
+  margin-left: 1rem;
+  flex-wrap: wrap;
+  gap: 3px;
 }
 
 .tab-btn {
@@ -1672,12 +1691,16 @@ body {
   .pitch-selector-tabs {
     order: -1;
     width: 100%;
-    display: flex;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4px;
+    margin-left: 0;
   }
 
   .pitch-selector-tabs .tab-btn {
-    flex: 1;
     text-align: center;
+    padding: 0.5rem 0.25rem;
+    font-size: 0.75rem;
   }
 
   .date-picker-wrapper {

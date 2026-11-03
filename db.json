@@ -95,6 +95,16 @@
       "id": "main_quarter_b2",
       "name": "Štvrtina B2",
       "parent_id": "main_half_b"
+    },
+    {
+      "id": "turf_full",
+      "name": "Umelá tráva",
+      "parent_id": null
+    },
+    {
+      "id": "gym_full",
+      "name": "Telocvičňa",
+      "parent_id": null
     }
   ],
   "reservations": []

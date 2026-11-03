@@ -248,6 +248,13 @@ function showToast(title, message, type = 'success') {
 // 5. DEFAULT DATA & LOCAL STORAGE FALLBACK ENGINE
 // ==========================================================================
 const DEFAULT_FIELDS = [
+  { id: "main_full", name: "Celé hlavné ihrisko", parent_id: null },
+  { id: "main_half_a", name: "Polovica A", parent_id: "main_full" },
+  { id: "main_half_b", name: "Polovica B", parent_id: "main_full" },
+  { id: "main_quarter_a1", name: "Štvrtina A1", parent_id: "main_half_a" },
+  { id: "main_quarter_a2", name: "Štvrtina A2", parent_id: "main_half_a" },
+  { id: "main_quarter_b1", name: "Štvrtina B1", parent_id: "main_half_b" },
+  { id: "main_quarter_b2", name: "Štvrtina B2", parent_id: "main_half_b" },
   { id: "training_full", name: "Celé tréningové ihrisko", parent_id: null },
   { id: "training_half_a", name: "Trén. Polovica A", parent_id: "training_full" },
   { id: "training_half_b", name: "Trén. Polovica B", parent_id: "training_full" },
@@ -255,13 +262,8 @@ const DEFAULT_FIELDS = [
   { id: "training_quarter_a2", name: "Trén. Štvrtina A2", parent_id: "training_half_a" },
   { id: "training_quarter_b1", name: "Trén. Štvrtina B1", parent_id: "training_half_b" },
   { id: "training_quarter_b2", name: "Trén. Štvrtina B2", parent_id: "training_half_b" },
-  { id: "main_full", name: "Celé hlavné ihrisko", parent_id: null },
-  { id: "main_half_a", name: "Polovica A", parent_id: "main_full" },
-  { id: "main_half_b", name: "Polovica B", parent_id: "main_full" },
-  { id: "main_quarter_a1", name: "Štvrtina A1", parent_id: "main_half_a" },
-  { id: "main_quarter_a2", name: "Štvrtina A2", parent_id: "main_half_a" },
-  { id: "main_quarter_b1", name: "Štvrtina B1", parent_id: "main_half_b" },
-  { id: "main_quarter_b2", name: "Štvrtina B2", parent_id: "main_half_b" }
+  { id: "turf_full", name: "Umelá tráva", parent_id: null },
+  { id: "gym_full", name: "Telocvičňa", parent_id: null }
 ];
 
 const DEFAULT_USERS = [
@@ -301,7 +303,7 @@ function getLocalDB() {
     return initialDb;
   }
   const localDb = JSON.parse(dbStr);
-  if (!localDb.fields || localDb.fields.length < 14) {
+  if (!localDb.fields || localDb.fields.length < DEFAULT_FIELDS.length) {
     localDb.fields = DEFAULT_FIELDS;
   }
   if (!localDb.users || localDb.users.length === 0) {
@@ -328,7 +330,14 @@ async function apiRequest(endpoint, options = {}) {
         const querySnapshot = await getDocs(collection(db, "fields"));
         if (!querySnapshot.empty) {
           const firestoreFields = [];
-          querySnapshot.forEach(doc => firestoreFields.push({ id: doc.id, ...doc.data() }));
+          querySnapshot.forEach(docSnap => firestoreFields.push({ id: docSnap.id, ...docSnap.data() }));
+          // Ensure all default fields are present
+          DEFAULT_FIELDS.forEach(df => {
+            if (!firestoreFields.some(f => f.id === df.id)) {
+              firestoreFields.push(df);
+              try { setDoc(doc(db, "fields", df.id), df); } catch (e) {}
+            }
+          });
           return firestoreFields;
         }
       } catch (err) {
@@ -924,7 +933,9 @@ function getDaysOfCurrentView() {
 function renderCalendarGrid() {
   const days = getDaysOfCurrentView();
   const numDays = days.length;
-  const totalGridCols = numDays * 4;
+  const isDividedPitch = state.activeFieldMode === 'main' || state.activeFieldMode === 'training';
+  const lanesPerDay = isDividedPitch ? 4 : 1;
+  const totalGridCols = numDays * lanesPerDay;
   
   document.documentElement.style.setProperty('--num-columns', totalGridCols);
   
@@ -934,13 +945,13 @@ function renderCalendarGrid() {
   
   const todayStr = formatDateISO(new Date());
 
-  // Row 1: Day headers spanning 4 columns
+  // Row 1: Day headers spanning lanesPerDay columns
   days.forEach((day, dIdx) => {
     const isToday = formatDateISO(day) === todayStr;
     const dayHeader = document.createElement('div');
     dayHeader.className = `day-column-header-span ${isToday ? 'is-today' : ''}`;
-    const startCol = 2 + dIdx * 4;
-    dayHeader.style.gridColumn = `${startCol} / span 4`;
+    const startCol = 2 + dIdx * lanesPerDay;
+    dayHeader.style.gridColumn = `${startCol} / span ${lanesPerDay}`;
     
     dayHeader.innerHTML = `
       <div>
@@ -951,17 +962,28 @@ function renderCalendarGrid() {
     headerGrid.appendChild(dayHeader);
   });
 
-  // Row 2: Sub-headers (A1, A2, B1, B2)
-  const lanes = ['A1', 'A2', 'B1', 'B2'];
-  for (let dIdx = 0; dIdx < numDays; dIdx++) {
-    lanes.forEach((laneName, lIdx) => {
+  // Row 2: Sub-headers
+  if (isDividedPitch) {
+    const lanes = ['A1', 'A2', 'B1', 'B2'];
+    for (let dIdx = 0; dIdx < numDays; dIdx++) {
+      lanes.forEach((laneName, lIdx) => {
+        const laneHeader = document.createElement('div');
+        laneHeader.className = `lane-sub-header ${lIdx === 3 ? 'end-of-day' : ''} ${lIdx === 1 ? 'half-separator' : ''}`;
+        const colIdx = 2 + dIdx * 4 + lIdx;
+        laneHeader.style.gridColumn = `${colIdx}`;
+        laneHeader.textContent = laneName;
+        headerGrid.appendChild(laneHeader);
+      });
+    }
+  } else {
+    for (let dIdx = 0; dIdx < numDays; dIdx++) {
       const laneHeader = document.createElement('div');
-      laneHeader.className = `lane-sub-header ${lIdx === 3 ? 'end-of-day' : ''} ${lIdx === 1 ? 'half-separator' : ''}`;
-      const colIdx = 2 + dIdx * 4 + lIdx;
+      laneHeader.className = 'lane-sub-header end-of-day';
+      const colIdx = 2 + dIdx;
       laneHeader.style.gridColumn = `${colIdx}`;
-      laneHeader.textContent = laneName;
+      laneHeader.textContent = 'Celá plocha';
       headerGrid.appendChild(laneHeader);
-    });
+    }
   }
 
   const title = document.getElementById('calendar-week-range');
@@ -996,22 +1018,26 @@ function renderCalendarGrid() {
       const cell = document.createElement('div');
       cell.className = `calendar-cell ${isHourSlot ? 'hour-cell' : ''}`;
       
-      const dayIdx = Math.floor(colIdx / 4);
-      const laneIdx = colIdx % 4;
+      const dayIdx = Math.floor(colIdx / lanesPerDay);
+      const laneIdx = colIdx % lanesPerDay;
       
       let fieldId;
       if (state.activeFieldMode === 'training') {
         const laneFields = ['training_quarter_a1', 'training_quarter_a2', 'training_quarter_b1', 'training_quarter_b2'];
         fieldId = laneFields[laneIdx];
-      } else {
+      } else if (state.activeFieldMode === 'main') {
         const laneFields = ['main_quarter_a1', 'main_quarter_a2', 'main_quarter_b1', 'main_quarter_b2'];
         fieldId = laneFields[laneIdx];
+      } else if (state.activeFieldMode === 'turf') {
+        fieldId = 'turf_full';
+      } else if (state.activeFieldMode === 'gym') {
+        fieldId = 'gym_full';
       }
       
-      if (laneIdx === 3) {
+      if (laneIdx === lanesPerDay - 1) {
         cell.classList.add('end-of-day');
       }
-      if (laneIdx === 1) {
+      if (isDividedPitch && laneIdx === 1) {
         cell.classList.add('half-separator');
       }
       
@@ -1042,16 +1068,22 @@ function renderReservationsOverlay() {
   const numDays = days.length;
   const daysStrMap = days.map(d => formatDateISO(d));
 
-  const totalGridCols = numDays * 4;
-  const lanesPerDay = 4;
+  const isDividedPitch = state.activeFieldMode === 'main' || state.activeFieldMode === 'training';
+  const lanesPerDay = isDividedPitch ? 4 : 1;
+  const totalGridCols = numDays * lanesPerDay;
 
   const filteredReservations = state.reservations.filter(res => {
-    const isTrainingRes = res.field_id && res.field_id.startsWith('training_');
+    if (!res.field_id) return false;
     if (state.activeFieldMode === 'training') {
-      return isTrainingRes;
-    } else {
-      return !isTrainingRes;
+      return res.field_id.startsWith('training_');
+    } else if (state.activeFieldMode === 'main') {
+      return res.field_id.startsWith('main_');
+    } else if (state.activeFieldMode === 'turf') {
+      return res.field_id.startsWith('turf_');
+    } else if (state.activeFieldMode === 'gym') {
+      return res.field_id.startsWith('gym_');
     }
+    return false;
   });
 
   filteredReservations.forEach(res => {
@@ -1083,21 +1115,26 @@ function renderReservationsOverlay() {
     let laneOffset = 0;
     let laneSpan = 1;
 
-    const fieldId = res.field_id || '';
-    if (fieldId.endsWith('_quarter_a1')) {
-      laneOffset = 0; laneSpan = 1;
-    } else if (fieldId.endsWith('_quarter_a2')) {
-      laneOffset = 1; laneSpan = 1;
-    } else if (fieldId.endsWith('_quarter_b1')) {
-      laneOffset = 2; laneSpan = 1;
-    } else if (fieldId.endsWith('_quarter_b2')) {
-      laneOffset = 3; laneSpan = 1;
-    } else if (fieldId.endsWith('_half_a')) {
-      laneOffset = 0; laneSpan = 2;
-    } else if (fieldId.endsWith('_half_b')) {
-      laneOffset = 2; laneSpan = 2;
-    } else if (fieldId.endsWith('_full')) {
-      laneOffset = 0; laneSpan = 4;
+    if (isDividedPitch) {
+      const fieldId = res.field_id || '';
+      if (fieldId.endsWith('_quarter_a1')) {
+        laneOffset = 0; laneSpan = 1;
+      } else if (fieldId.endsWith('_quarter_a2')) {
+        laneOffset = 1; laneSpan = 1;
+      } else if (fieldId.endsWith('_quarter_b1')) {
+        laneOffset = 2; laneSpan = 1;
+      } else if (fieldId.endsWith('_quarter_b2')) {
+        laneOffset = 3; laneSpan = 1;
+      } else if (fieldId.endsWith('_half_a')) {
+        laneOffset = 0; laneSpan = 2;
+      } else if (fieldId.endsWith('_half_b')) {
+        laneOffset = 2; laneSpan = 2;
+      } else if (fieldId.endsWith('_full')) {
+        laneOffset = 0; laneSpan = 4;
+      }
+    } else {
+      laneOffset = 0;
+      laneSpan = 1;
     }
 
     const colStart = dayColumnIdx * lanesPerDay + laneOffset;
@@ -1177,8 +1214,11 @@ function startDragSelection(e, colIdx, slotIdx) {
 function handleDragEnter(colIdx, slotIdx) {
   if (!isDragging) return;
 
-  const startDayIdx = Math.floor(dragStartColIdx / 4);
-  const currentDayIdx = Math.floor(colIdx / 4);
+  const isDividedPitch = state.activeFieldMode === 'main' || state.activeFieldMode === 'training';
+  const lanesPerDay = isDividedPitch ? 4 : 1;
+
+  const startDayIdx = Math.floor(dragStartColIdx / lanesPerDay);
+  const currentDayIdx = Math.floor(colIdx / lanesPerDay);
   if (currentDayIdx !== startDayIdx) return; // restrict drag selection to a single day maximum
 
   clearDragSelectionStyles();
@@ -1239,25 +1279,32 @@ function finalizeDragSelection() {
   const startSlotStr = TIME_SLOTS[minSlot];
   let endSlotStr = maxSlot + 1 < TIME_SLOTS.length ? TIME_SLOTS[maxSlot + 1] : `${END_HOUR}:00`;
 
-  // Map selected column spans to matching Pitch Quarter, Half, or Full
-  const laneStartIdx = minCol % 4;
-  const laneEndIdx = maxCol % 4;
-  const laneSpan = laneEndIdx - laneStartIdx + 1;
-  
-  const modePrefix = state.activeFieldMode === 'training' ? 'training' : 'main';
-  let resolvedFieldId = `${modePrefix}_quarter_a1`;
+  let resolvedFieldId;
+  if (state.activeFieldMode === 'turf') {
+    resolvedFieldId = 'turf_full';
+  } else if (state.activeFieldMode === 'gym') {
+    resolvedFieldId = 'gym_full';
+  } else {
+    // Map selected column spans to matching Pitch Quarter, Half, or Full
+    const laneStartIdx = minCol % 4;
+    const laneEndIdx = maxCol % 4;
+    const laneSpan = laneEndIdx - laneStartIdx + 1;
+    
+    const modePrefix = state.activeFieldMode === 'training' ? 'training' : 'main';
+    resolvedFieldId = `${modePrefix}_quarter_a1`;
 
-  if (laneSpan >= 4) {
-    resolvedFieldId = `${modePrefix}_full`;
-  } else if (laneSpan === 2 || laneSpan === 3) {
-    if (laneStartIdx <= 1) {
-      resolvedFieldId = `${modePrefix}_half_a`;
-    } else {
-      resolvedFieldId = `${modePrefix}_half_b`;
+    if (laneSpan >= 4) {
+      resolvedFieldId = `${modePrefix}_full`;
+    } else if (laneSpan === 2 || laneSpan === 3) {
+      if (laneStartIdx <= 1) {
+        resolvedFieldId = `${modePrefix}_half_a`;
+      } else {
+        resolvedFieldId = `${modePrefix}_half_b`;
+      }
+    } else if (laneSpan === 1) {
+      const suffixes = ['_quarter_a1', '_quarter_a2', '_quarter_b1', '_quarter_b2'];
+      resolvedFieldId = modePrefix + suffixes[laneStartIdx];
     }
-  } else if (laneSpan === 1) {
-    const suffixes = ['_quarter_a1', '_quarter_a2', '_quarter_b1', '_quarter_b2'];
-    resolvedFieldId = modePrefix + suffixes[laneStartIdx];
   }
 
   openReservationModal({
@@ -1378,7 +1425,11 @@ function openReservationModal(res = null) {
       document.getElementById('res-user-id').value = state.user.id;
     }
 
-    const defaultFieldId = state.activeFieldMode === 'training' ? 'training_full' : 'main_full';
+    let defaultFieldId;
+    if (state.activeFieldMode === 'training') defaultFieldId = 'training_full';
+    else if (state.activeFieldMode === 'turf') defaultFieldId = 'turf_full';
+    else if (state.activeFieldMode === 'gym') defaultFieldId = 'gym_full';
+    else defaultFieldId = 'main_full';
     if (res) {
       document.getElementById('res-field-id').value = res.field_id || defaultFieldId;
       const sDate = new Date(res.start_time);
@@ -1789,18 +1840,25 @@ document.getElementById('view-day-btn').addEventListener('click', () => {
 });
 
 // Pitch Tab Controls
-document.getElementById('pitch-tab-main').addEventListener('click', () => {
-  document.getElementById('pitch-tab-main').classList.add('active');
-  document.getElementById('pitch-tab-training').classList.remove('active');
-  state.activeFieldMode = 'main';
-  refreshCalendar();
-});
+const pitchTabs = [
+  { id: 'pitch-tab-main', mode: 'main' },
+  { id: 'pitch-tab-training', mode: 'training' },
+  { id: 'pitch-tab-turf', mode: 'turf' },
+  { id: 'pitch-tab-gym', mode: 'gym' }
+];
 
-document.getElementById('pitch-tab-training').addEventListener('click', () => {
-  document.getElementById('pitch-tab-training').classList.add('active');
-  document.getElementById('pitch-tab-main').classList.remove('active');
-  state.activeFieldMode = 'training';
-  refreshCalendar();
+pitchTabs.forEach(tab => {
+  const btn = document.getElementById(tab.id);
+  if (btn) {
+    btn.addEventListener('click', () => {
+      pitchTabs.forEach(t => {
+        const b = document.getElementById(t.id);
+        if (b) b.classList.toggle('active', t.id === tab.id);
+      });
+      state.activeFieldMode = tab.mode;
+      refreshCalendar();
+    });
+  }
 });
 
 // Auth Submit & Reset DB
