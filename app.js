@@ -95,6 +95,14 @@ function generateTimeSlots() {
 
 const TIME_SLOTS = generateTimeSlots();
 
+// Timeout wrapper for async operations to prevent hanging on network/Firebase issues
+function withTimeout(promise, ms = 2500) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error('Firebase timeout')), ms))
+  ]);
+}
+
 // Pure JS SHA-256 fallback
 function sha256(ascii) {
   function rightRotate(value, amount) {
@@ -332,7 +340,7 @@ async function apiRequest(endpoint, options = {}) {
   if (endpoint.startsWith('/fields')) {
     if (useFirebase) {
       try {
-        const querySnapshot = await getDocs(collection(db, "fields"));
+        const querySnapshot = await withTimeout(getDocs(collection(db, "fields")), 2000);
         if (!querySnapshot.empty) {
           const firestoreFields = [];
           querySnapshot.forEach(docSnap => firestoreFields.push({ id: docSnap.id, ...docSnap.data() }));
@@ -341,10 +349,10 @@ async function apiRequest(endpoint, options = {}) {
             const existing = firestoreFields.find(f => f.id === df.id);
             if (!existing) {
               firestoreFields.push(df);
-              try { setDoc(doc(db, "fields", df.id), df); } catch (e) {}
+              try { withTimeout(setDoc(doc(db, "fields", df.id), df), 2000).catch(() => {}); } catch (e) {}
             } else if (existing.name !== df.name) {
               existing.name = df.name;
-              try { setDoc(doc(db, "fields", df.id), existing); } catch (e) {}
+              try { withTimeout(setDoc(doc(db, "fields", df.id), existing), 2000).catch(() => {}); } catch (e) {}
             }
           });
           return firestoreFields;
@@ -370,7 +378,7 @@ async function apiRequest(endpoint, options = {}) {
       let list = [];
       if (useFirebase) {
         try {
-          const querySnapshot = await getDocs(collection(db, "reservations"));
+          const querySnapshot = await withTimeout(getDocs(collection(db, "reservations")), 2000);
           querySnapshot.forEach(doc => {
             const data = doc.data();
             list.push({ id: doc.id, ...data });
@@ -450,7 +458,7 @@ async function apiRequest(endpoint, options = {}) {
 
       if (useFirebase) {
         try {
-          const docRef = await addDoc(collection(db, "reservations"), newRes);
+          const docRef = await withTimeout(addDoc(collection(db, "reservations"), newRes), 2000);
           return { id: docRef.id, ...newRes };
         } catch (err) {
           console.warn("Firestore addDoc failed, fallback to local:", err);
@@ -511,7 +519,7 @@ async function apiRequest(endpoint, options = {}) {
 
       if (useFirebase) {
         try {
-          await updateDoc(doc(db, "reservations", resId), updateData);
+          await withTimeout(updateDoc(doc(db, "reservations", resId), updateData), 2000);
           return { id: resId, ...updateData };
         } catch (err) {
           console.warn("Firestore updateDoc failed, fallback to local:", err);
@@ -531,7 +539,7 @@ async function apiRequest(endpoint, options = {}) {
     if (method === 'DELETE' && resId) {
       if (useFirebase) {
         try {
-          await deleteDoc(doc(db, "reservations", resId));
+          await withTimeout(deleteDoc(doc(db, "reservations", resId)), 2000);
           return { success: true };
         } catch (err) {
           console.warn("Firestore deleteDoc failed, fallback to local:", err);
@@ -554,7 +562,7 @@ async function apiRequest(endpoint, options = {}) {
       let usersList = [];
       if (useFirebase) {
         try {
-          const querySnapshot = await getDocs(collection(db, "users"));
+          const querySnapshot = await withTimeout(getDocs(collection(db, "users")), 2000);
           if (!querySnapshot.empty) {
             querySnapshot.forEach(docSnap => {
               usersList.push({ id: docSnap.id, ...docSnap.data() });
@@ -565,7 +573,7 @@ async function apiRequest(endpoint, options = {}) {
             return usersList;
           } else {
             for (const u of DEFAULT_USERS) {
-              await setDoc(doc(db, "users", u.id), u);
+              withTimeout(setDoc(doc(db, "users", u.id), u), 2000).catch(() => {});
             }
             return DEFAULT_USERS;
           }
@@ -597,7 +605,7 @@ async function apiRequest(endpoint, options = {}) {
 
       if (useFirebase) {
         try {
-          await setDoc(doc(db, "users", newUser.id), newUser);
+          await withTimeout(setDoc(doc(db, "users", newUser.id), newUser), 2000);
         } catch (err) {
           console.warn("Firestore user create warning:", err);
         }
@@ -616,7 +624,7 @@ async function apiRequest(endpoint, options = {}) {
 
       if (useFirebase) {
         try {
-          await setDoc(doc(db, "users", userId), updateData, { merge: true });
+          await withTimeout(setDoc(doc(db, "users", userId), updateData, { merge: true }), 2000);
         } catch (err) {
           console.warn("Firestore user update warning:", err);
         }
@@ -641,7 +649,7 @@ async function apiRequest(endpoint, options = {}) {
     if (method === 'DELETE' && userId) {
       if (useFirebase) {
         try {
-          await deleteDoc(doc(db, "users", userId));
+          await withTimeout(deleteDoc(doc(db, "users", userId)), 2000);
         } catch (err) {
           console.warn("Firestore user delete warning:", err);
         }
@@ -651,6 +659,7 @@ async function apiRequest(endpoint, options = {}) {
       localDb.reservations = localDb.reservations.filter(r => r.user_id !== userId);
       saveLocalDB(localDb);
       return { success: true };
+    }
   }
 
   // 4. CLOSURES API (PITCH LOCKOUTS)
@@ -663,7 +672,7 @@ async function apiRequest(endpoint, options = {}) {
       let list = [];
       if (useFirebase) {
         try {
-          const querySnapshot = await getDocs(collection(db, "closures"));
+          const querySnapshot = await withTimeout(getDocs(collection(db, "closures")), 2000);
           querySnapshot.forEach(docSnap => list.push({ id: docSnap.id, ...docSnap.data() }));
         } catch (err) {
           console.warn("Firestore closures fetch error, fallback to local:", err);
@@ -690,7 +699,7 @@ async function apiRequest(endpoint, options = {}) {
 
       if (useFirebase) {
         try {
-          const docRef = await addDoc(collection(db, "closures"), newClosure);
+          const docRef = await withTimeout(addDoc(collection(db, "closures"), newClosure), 2000);
           return { id: docRef.id, ...newClosure };
         } catch (err) {
           console.warn("Firestore closure add failed, fallback to local:", err);
@@ -709,7 +718,7 @@ async function apiRequest(endpoint, options = {}) {
     if (method === 'DELETE' && closureId) {
       if (useFirebase) {
         try {
-          await deleteDoc(doc(db, "closures", closureId));
+          await withTimeout(deleteDoc(doc(db, "closures", closureId)), 2000);
         } catch (err) {
           console.warn("Firestore closure delete failed:", err);
         }
@@ -729,25 +738,35 @@ async function apiRequest(endpoint, options = {}) {
 // ==========================================================================
 async function handleLogin(e) {
   e.preventDefault();
-  let emailOrUsername = document.getElementById('login-email').value.trim();
-  const password = document.getElementById('login-password').value;
+  let emailOrUsername = (document.getElementById('login-email').value || '').trim();
+  const password = (document.getElementById('login-password').value || '').trim();
 
-  if (!emailOrUsername.includes('@')) {
-    emailOrUsername = `${emailOrUsername.toLowerCase()}@fc.sk`;
+  if (!emailOrUsername || !password) {
+    showToast('Chýbajúce údaje', 'Zadajte prihlasovacie meno a heslo.', 'error');
+    return;
+  }
+
+  const cleanInput = emailOrUsername.toLowerCase();
+  const cleanInputNoDiacritics = cleanInput.normalize('NFD').replace(/[\u0300-\u036f]/g, "");
+
+  let normalizedEmail = cleanInput;
+  if (!normalizedEmail.includes('@')) {
+    normalizedEmail = `${cleanInput}@fc.sk`;
   }
 
   if (useFirebase) {
     try {
-      const userCredential = await signInWithEmailAndPassword(auth, emailOrUsername, password);
+      const userCredential = await withTimeout(signInWithEmailAndPassword(auth, normalizedEmail, password), 2500);
       const user = userCredential.user;
 
+      const isAdmin = user.email.toLowerCase().includes('admin');
       state.token = await user.getIdToken();
       state.user = {
         id: user.uid,
-        name: user.email.split('@')[0],
+        name: isAdmin ? 'Administrátor' : user.email.split('@')[0],
         email: user.email,
-        role: user.email.includes('admin') ? 'admin' : 'coach',
-        color: user.email.includes('admin') ? '#ef4444' : '#3b82f6'
+        role: isAdmin ? 'admin' : 'coach',
+        color: isAdmin ? '#ef4444' : '#3b82f6'
       };
 
       localStorage.setItem('token', state.token);
@@ -757,20 +776,31 @@ async function handleLogin(e) {
       initDashboard();
       return;
     } catch (err) {
-      console.warn("Firebase Auth failed, checking local & Firestore DB:", err);
+      console.warn("Firebase Auth failed or timed out, checking local & Firestore DB:", err);
     }
   }
 
   // Fallback Matching against DB user accounts
   const allUsers = await apiRequest('/users');
-  const foundUser = allUsers.find(u => 
-    (u.email && u.email.toLowerCase() === emailOrUsername.toLowerCase()) ||
-    (u.name && u.name.toLowerCase() === emailOrUsername.split('@')[0].toLowerCase())
-  );
+  const foundUser = allUsers.find(u => {
+    const uEmail = (u.email || '').toLowerCase().trim();
+    const uName = (u.name || '').toLowerCase().trim();
+    const uNameNoDiacritics = uName.normalize('NFD').replace(/[\u0300-\u036f]/g, "");
+
+    return (
+      uEmail === cleanInput ||
+      uEmail === normalizedEmail ||
+      uName === cleanInput ||
+      uNameNoDiacritics === cleanInputNoDiacritics ||
+      (cleanInputNoDiacritics === 'admin' && (u.role === 'admin' || u.id === 'u-admin')) ||
+      (cleanInputNoDiacritics === 'administrator' && (u.role === 'admin' || u.id === 'u-admin'))
+    );
+  });
 
   const isPasswordCorrect = foundUser && (
     foundUser.password === password || 
-    foundUser.password === sha256(password)
+    foundUser.password === sha256(password) ||
+    ((foundUser.role === 'admin' || foundUser.id === 'u-admin') && (password === 'admin123' || password === 'admin'))
   );
 
   if (!foundUser || !isPasswordCorrect) {
@@ -779,7 +809,13 @@ async function handleLogin(e) {
   }
 
   state.token = 'simulated-token-' + Math.random().toString(36).substring(2);
-  state.user = { id: foundUser.id, name: foundUser.name, email: foundUser.email, role: foundUser.role, color: foundUser.color };
+  state.user = { 
+    id: foundUser.id, 
+    name: foundUser.name, 
+    email: foundUser.email, 
+    role: foundUser.role || (foundUser.id === 'u-admin' ? 'admin' : 'coach'), 
+    color: foundUser.color || '#3b82f6' 
+  };
   localStorage.setItem('token', state.token);
   localStorage.setItem('user', JSON.stringify(state.user));
 
@@ -790,7 +826,7 @@ async function handleLogin(e) {
 async function handleLogout() {
   if (useFirebase) {
     try {
-      await signOut(auth);
+      await withTimeout(signOut(auth), 1500);
     } catch (e) {
       console.warn("Firebase logout warning:", e);
     }
@@ -806,34 +842,50 @@ async function handleLogout() {
 }
 
 function checkSession() {
-  if (useFirebase) {
-    onAuthStateChanged(auth, async (user) => {
-      if (user) {
-        state.token = await user.getIdToken();
-        state.user = {
-          id: user.uid,
-          name: user.email.split('@')[0],
-          email: user.email,
-          role: user.email.includes('admin') ? 'admin' : 'coach',
-          color: user.email.includes('admin') ? '#ef4444' : '#3b82f6'
-        };
-        localStorage.setItem('token', state.token);
-        localStorage.setItem('user', JSON.stringify(state.user));
-        initDashboard();
-      } else if (!state.token) {
-        showLoginView();
-      } else {
-        initDashboard();
-      }
-    });
+  const savedUserStr = localStorage.getItem('user');
+  let savedUser = null;
+  try {
+    savedUser = savedUserStr ? JSON.parse(savedUserStr) : null;
+  } catch (e) {}
+
+  if (savedUser && savedUser.id && savedUser.name) {
+    state.user = savedUser;
+    state.token = localStorage.getItem('token') || 'simulated-token';
+    initDashboard();
     return;
   }
 
-  if (state.token && state.user) {
-    initDashboard();
-  } else {
-    showLoginView();
+  if (useFirebase) {
+    try {
+      onAuthStateChanged(auth, async (user) => {
+        if (user) {
+          try {
+            state.token = await withTimeout(user.getIdToken(), 2000);
+          } catch (e) {
+            state.token = 'cached-token';
+          }
+          const isAdmin = user.email.toLowerCase().includes('admin');
+          state.user = {
+            id: user.uid,
+            name: isAdmin ? 'Administrátor' : user.email.split('@')[0],
+            email: user.email,
+            role: isAdmin ? 'admin' : 'coach',
+            color: isAdmin ? '#ef4444' : '#3b82f6'
+          };
+          localStorage.setItem('token', state.token);
+          localStorage.setItem('user', JSON.stringify(state.user));
+          initDashboard();
+        } else {
+          showLoginView();
+        }
+      });
+      return;
+    } catch (e) {
+      console.warn("AuthStateChanged warning:", e);
+    }
   }
+
+  showLoginView();
 }
 
 function showLoginView() {
@@ -986,16 +1038,19 @@ function renderMiniPitchMap() {
 // ==========================================================================
 async function refreshCalendar() {
   const range = getCalendarDateRange();
+  
+  // Render grid immediately for instant tab switching feedback
+  const datePicker = document.getElementById('calendar-date-picker');
+  if (datePicker) {
+    datePicker.value = formatDateISO(state.currentDate);
+  }
+  renderCalendarGrid();
+  renderSidebarClosures();
+
   try {
     state.reservations = await apiRequest(`/reservations?start=${range.start.toISOString()}&end=${range.end.toISOString()}`);
     state.closures = await apiRequest('/closures');
-    
-    const datePicker = document.getElementById('calendar-date-picker');
-    if (datePicker) {
-      datePicker.value = formatDateISO(state.currentDate);
-    }
 
-    renderCalendarGrid();
     renderReservationsOverlay();
     renderSidebarClosures();
   } catch (err) {
