@@ -44,6 +44,7 @@ const state = {
   fields: [],
   users: [],
   reservations: [],
+  closures: [],
   fieldsMap: {}
 };
 
@@ -262,7 +263,8 @@ const DEFAULT_FIELDS = [
   { id: "training_quarter_a2", name: "Trén. Štvrtina A2", parent_id: "training_half_a" },
   { id: "training_quarter_b1", name: "Trén. Štvrtina B1", parent_id: "training_half_b" },
   { id: "training_quarter_b2", name: "Trén. Štvrtina B2", parent_id: "training_half_b" },
-  { id: "turf_full", name: "Umelá tráva", parent_id: null },
+  { id: "turf_full", name: "Umelá tráva - škola", parent_id: null },
+  { id: "turf_park_full", name: "Umelá tráva - park", parent_id: null },
   { id: "gym_full", name: "Telocvičňa", parent_id: null }
 ];
 
@@ -298,16 +300,19 @@ const MOCK_STORAGE_KEY = 'fc_reservation_db';
 function getLocalDB() {
   let dbStr = localStorage.getItem(MOCK_STORAGE_KEY);
   if (!dbStr) {
-    const initialDb = { users: DEFAULT_USERS, fields: DEFAULT_FIELDS, reservations: [] };
+    const initialDb = { users: DEFAULT_USERS, fields: DEFAULT_FIELDS, reservations: [], closures: [] };
     localStorage.setItem(MOCK_STORAGE_KEY, JSON.stringify(initialDb));
     return initialDb;
   }
   const localDb = JSON.parse(dbStr);
-  if (!localDb.fields || localDb.fields.length < DEFAULT_FIELDS.length) {
+  if (!localDb.fields || localDb.fields.length < DEFAULT_FIELDS.length || !localDb.fields.some(f => f.id === 'turf_park_full')) {
     localDb.fields = DEFAULT_FIELDS;
   }
   if (!localDb.users || localDb.users.length === 0) {
     localDb.users = DEFAULT_USERS;
+  }
+  if (!localDb.closures) {
+    localDb.closures = [];
   }
   saveLocalDB(localDb);
   return localDb;
@@ -331,11 +336,15 @@ async function apiRequest(endpoint, options = {}) {
         if (!querySnapshot.empty) {
           const firestoreFields = [];
           querySnapshot.forEach(docSnap => firestoreFields.push({ id: docSnap.id, ...docSnap.data() }));
-          // Ensure all default fields are present
+          // Ensure all default fields are present and names are updated
           DEFAULT_FIELDS.forEach(df => {
-            if (!firestoreFields.some(f => f.id === df.id)) {
+            const existing = firestoreFields.find(f => f.id === df.id);
+            if (!existing) {
               firestoreFields.push(df);
               try { setDoc(doc(db, "fields", df.id), df); } catch (e) {}
+            } else if (existing.name !== df.name) {
+              existing.name = df.name;
+              try { setDoc(doc(db, "fields", df.id), existing); } catch (e) {}
             }
           });
           return firestoreFields;
@@ -414,6 +423,18 @@ async function apiRequest(endpoint, options = {}) {
         }
       }
 
+      // Check against active pitch closures
+      const activeClosures = await apiRequest('/closures');
+      for (const c of activeClosures) {
+        if (areTimesOverlapping(start_time, end_time, c.start_time, c.end_time)) {
+          if (areFieldsConflicting(field_id, c.field_id)) {
+            const closedField = state.fieldsMap[c.field_id] ? state.fieldsMap[c.field_id].name : c.field_id;
+            const reasonDetail = c.note ? `${c.reason} (${c.note})` : c.reason;
+            throw new Error(`Plocha '${closedField}' je v tomto čase uzatvorená z dôvodu: ${reasonDetail}. Rezervácia nie je možná.`);
+          }
+        }
+      }
+
       const newRes = {
         user_id: targetUserId,
         user_name: targetUser.name,
@@ -455,6 +476,17 @@ async function apiRequest(endpoint, options = {}) {
           if (areFieldsConflicting(field_id, r.field_id)) {
             const conflictField = state.fieldsMap[r.field_id] ? state.fieldsMap[r.field_id].name : r.field_id;
             throw new Error(`Konflikt: ${r.user_name} už má v tomto čase rezervovanú plochu '${conflictField}'.`);
+          }
+        }
+      }
+
+      const activeClosures = await apiRequest('/closures');
+      for (const c of activeClosures) {
+        if (areTimesOverlapping(start_time, end_time, c.start_time, c.end_time)) {
+          if (areFieldsConflicting(field_id, c.field_id)) {
+            const closedField = state.fieldsMap[c.field_id] ? state.fieldsMap[c.field_id].name : c.field_id;
+            const reasonDetail = c.note ? `${c.reason} (${c.note})` : c.reason;
+            throw new Error(`Plocha '${closedField}' je v tomto čase uzatvorená z dôvodu: ${reasonDetail}. Rezervácia nie je možná.`);
           }
         }
       }
@@ -619,6 +651,73 @@ async function apiRequest(endpoint, options = {}) {
       localDb.reservations = localDb.reservations.filter(r => r.user_id !== userId);
       saveLocalDB(localDb);
       return { success: true };
+  }
+
+  // 4. CLOSURES API (PITCH LOCKOUTS)
+  if (endpoint.startsWith('/closures')) {
+    const parts = endpoint.split('?')[0].split('/').filter(Boolean);
+    const closureId = parts[1];
+
+    // GET /closures
+    if (method === 'GET' && !closureId) {
+      let list = [];
+      if (useFirebase) {
+        try {
+          const querySnapshot = await getDocs(collection(db, "closures"));
+          querySnapshot.forEach(docSnap => list.push({ id: docSnap.id, ...docSnap.data() }));
+        } catch (err) {
+          console.warn("Firestore closures fetch error, fallback to local:", err);
+          list = getLocalDB().closures || [];
+        }
+      } else {
+        list = getLocalDB().closures || [];
+      }
+      return list;
+    }
+
+    // POST /closures
+    if (method === 'POST' && !closureId) {
+      const body = options.body || {};
+      const { field_id, start_time, end_time, reason, note } = body;
+      const newClosure = {
+        field_id,
+        start_time: new Date(start_time).toISOString(),
+        end_time: new Date(end_time).toISOString(),
+        reason: reason || 'Údržba',
+        note: note || '',
+        created_at: new Date().toISOString()
+      };
+
+      if (useFirebase) {
+        try {
+          const docRef = await addDoc(collection(db, "closures"), newClosure);
+          return { id: docRef.id, ...newClosure };
+        } catch (err) {
+          console.warn("Firestore closure add failed, fallback to local:", err);
+        }
+      }
+
+      const localDb = getLocalDB();
+      localDb.closures = localDb.closures || [];
+      const localClosure = { id: 'c-' + Math.random().toString(36).substring(2, 11), ...newClosure };
+      localDb.closures.push(localClosure);
+      saveLocalDB(localDb);
+      return localClosure;
+    }
+
+    // DELETE /closures/:id
+    if (method === 'DELETE' && closureId) {
+      if (useFirebase) {
+        try {
+          await deleteDoc(doc(db, "closures", closureId));
+        } catch (err) {
+          console.warn("Firestore closure delete failed:", err);
+        }
+      }
+      const localDb = getLocalDB();
+      localDb.closures = (localDb.closures || []).filter(c => c.id !== closureId);
+      saveLocalDB(localDb);
+      return { success: true };
     }
   }
 
@@ -779,11 +878,14 @@ async function initDashboard() {
     avatar.style.backgroundColor = state.user.color || '#4b5563';
 
     const adminToggleBtn = document.getElementById('admin-toggle-btn');
+    const closureBtn = document.getElementById('closure-btn');
     if (state.user.role === 'admin') {
       adminToggleBtn.classList.remove('hidden');
+      if (closureBtn) closureBtn.classList.remove('hidden');
       document.getElementById('res-user-select-group').classList.remove('hidden');
     } else {
       adminToggleBtn.classList.add('hidden');
+      if (closureBtn) closureBtn.classList.add('hidden');
       document.getElementById('res-user-select-group').classList.add('hidden');
     }
 
@@ -886,6 +988,7 @@ async function refreshCalendar() {
   const range = getCalendarDateRange();
   try {
     state.reservations = await apiRequest(`/reservations?start=${range.start.toISOString()}&end=${range.end.toISOString()}`);
+    state.closures = await apiRequest('/closures');
     
     const datePicker = document.getElementById('calendar-date-picker');
     if (datePicker) {
@@ -894,6 +997,7 @@ async function refreshCalendar() {
 
     renderCalendarGrid();
     renderReservationsOverlay();
+    renderSidebarClosures();
   } catch (err) {
     showToast('Chyba kalendára', 'Nepodarilo sa aktualizovať rezervácie.', 'error');
   }
@@ -1028,8 +1132,10 @@ function renderCalendarGrid() {
       } else if (state.activeFieldMode === 'main') {
         const laneFields = ['main_quarter_a1', 'main_quarter_a2', 'main_quarter_b1', 'main_quarter_b2'];
         fieldId = laneFields[laneIdx];
-      } else if (state.activeFieldMode === 'turf') {
+      } else if (state.activeFieldMode === 'turf_school' || state.activeFieldMode === 'turf') {
         fieldId = 'turf_full';
+      } else if (state.activeFieldMode === 'turf_park') {
+        fieldId = 'turf_park_full';
       } else if (state.activeFieldMode === 'gym') {
         fieldId = 'gym_full';
       }
@@ -1078,8 +1184,10 @@ function renderReservationsOverlay() {
       return res.field_id.startsWith('training_');
     } else if (state.activeFieldMode === 'main') {
       return res.field_id.startsWith('main_');
-    } else if (state.activeFieldMode === 'turf') {
-      return res.field_id.startsWith('turf_');
+    } else if (state.activeFieldMode === 'turf_school' || state.activeFieldMode === 'turf') {
+      return res.field_id === 'turf_full';
+    } else if (state.activeFieldMode === 'turf_park') {
+      return res.field_id === 'turf_park_full';
     } else if (state.activeFieldMode === 'gym') {
       return res.field_id.startsWith('gym_');
     }
@@ -1195,6 +1303,109 @@ function renderReservationsOverlay() {
 
     overlay.appendChild(card);
   });
+
+  // Render Closures (Pitch Lockouts) in light red with tooltip
+  const activeClosures = (state.closures || []).filter(c => {
+    if (!c.field_id) return false;
+    if (state.activeFieldMode === 'training') {
+      return c.field_id.startsWith('training_');
+    } else if (state.activeFieldMode === 'main') {
+      return c.field_id.startsWith('main_');
+    } else if (state.activeFieldMode === 'turf_school' || state.activeFieldMode === 'turf') {
+      return c.field_id === 'turf_full';
+    } else if (state.activeFieldMode === 'turf_park') {
+      return c.field_id === 'turf_park_full';
+    } else if (state.activeFieldMode === 'gym') {
+      return c.field_id.startsWith('gym_');
+    }
+    return false;
+  });
+
+  activeClosures.forEach(c => {
+    const localStart = new Date(c.start_time);
+    const localEnd = new Date(c.end_time);
+    const dateStr = formatDateISO(localStart);
+
+    const dayColumnIdx = daysStrMap.indexOf(dateStr);
+    if (dayColumnIdx === -1) return;
+
+    const startHour = localStart.getHours();
+    const startMin = localStart.getMinutes();
+    const endHour = localEnd.getHours();
+    const endMin = localEnd.getMinutes();
+
+    const calendarStartMins = START_HOUR * 60;
+    const startMins = startHour * 60 + startMin - calendarStartMins;
+    const endMins = endHour * 60 + endMin - calendarStartMins;
+
+    const calendarHeightMins = (END_HOUR - START_HOUR) * 60;
+    const clampedStartMins = Math.max(0, Math.min(calendarHeightMins, startMins));
+    const clampedEndMins = Math.max(0, Math.min(calendarHeightMins, endMins));
+
+    if (clampedStartMins >= clampedEndMins) return;
+
+    const top = (clampedStartMins / 30) * SLOT_HEIGHT;
+    const height = ((clampedEndMins - clampedStartMins) / 30) * SLOT_HEIGHT;
+
+    let laneOffset = 0;
+    let laneSpan = 1;
+
+    if (isDividedPitch) {
+      const fieldId = c.field_id || '';
+      if (fieldId.endsWith('_quarter_a1')) {
+        laneOffset = 0; laneSpan = 1;
+      } else if (fieldId.endsWith('_quarter_a2')) {
+        laneOffset = 1; laneSpan = 1;
+      } else if (fieldId.endsWith('_quarter_b1')) {
+        laneOffset = 2; laneSpan = 1;
+      } else if (fieldId.endsWith('_quarter_b2')) {
+        laneOffset = 3; laneSpan = 1;
+      } else if (fieldId.endsWith('_half_a')) {
+        laneOffset = 0; laneSpan = 2;
+      } else if (fieldId.endsWith('_half_b')) {
+        laneOffset = 2; laneSpan = 2;
+      } else if (fieldId.endsWith('_full')) {
+        laneOffset = 0; laneSpan = 4;
+      }
+    } else {
+      laneOffset = 0;
+      laneSpan = 1;
+    }
+
+    const colStart = dayColumnIdx * lanesPerDay + laneOffset;
+    const leftPercent = (colStart / totalGridCols) * 100;
+    const widthPercent = (laneSpan / totalGridCols) * 100;
+
+    const card = document.createElement('div');
+    card.className = 'reservation-card is-closure';
+    card.style.top = `${top}px`;
+    card.style.height = `${height}px`;
+    card.style.left = `calc(${leftPercent}% + 2px)`;
+    card.style.width = `calc(${widthPercent}% - 4px)`;
+
+    const formatTimeStr = (d) => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+    const fieldName = state.fieldsMap[c.field_id] ? state.fieldsMap[c.field_id].name : c.field_id;
+
+    card.title = `⚠️ Uzávera: ${c.reason || 'Uzávera'}${c.note ? ' - ' + c.note : ''}\nČas: ${formatTimeStr(localStart)} - ${formatTimeStr(localEnd)} (${formatDisplayDate(localStart)})\nPlocha: ${fieldName}`;
+
+    card.innerHTML = `
+      <div class="res-card-header">
+        <span class="res-card-coach" style="font-weight: 700; color: #dc2626;">⚠️ ${c.reason || 'Uzávera'}</span>
+        <span class="res-card-time" style="font-size: 0.6rem;">${formatTimeStr(localStart)} - ${formatTimeStr(localEnd)}</span>
+      </div>
+      <div class="res-card-field" style="color: #991b1b; font-weight: 600;">${c.note ? c.note : fieldName}</div>
+    `;
+
+    if (state.user && state.user.role === 'admin') {
+      card.style.cursor = 'pointer';
+      card.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openClosureModal(c);
+      });
+    }
+
+    overlay.appendChild(card);
+  });
 }
 
 // ==========================================================================
@@ -1280,8 +1491,10 @@ function finalizeDragSelection() {
   let endSlotStr = maxSlot + 1 < TIME_SLOTS.length ? TIME_SLOTS[maxSlot + 1] : `${END_HOUR}:00`;
 
   let resolvedFieldId;
-  if (state.activeFieldMode === 'turf') {
+  if (state.activeFieldMode === 'turf_school' || state.activeFieldMode === 'turf') {
     resolvedFieldId = 'turf_full';
+  } else if (state.activeFieldMode === 'turf_park') {
+    resolvedFieldId = 'turf_park_full';
   } else if (state.activeFieldMode === 'gym') {
     resolvedFieldId = 'gym_full';
   } else {
@@ -1427,7 +1640,8 @@ function openReservationModal(res = null) {
 
     let defaultFieldId;
     if (state.activeFieldMode === 'training') defaultFieldId = 'training_full';
-    else if (state.activeFieldMode === 'turf') defaultFieldId = 'turf_full';
+    else if (state.activeFieldMode === 'turf_school' || state.activeFieldMode === 'turf') defaultFieldId = 'turf_full';
+    else if (state.activeFieldMode === 'turf_park') defaultFieldId = 'turf_park_full';
     else if (state.activeFieldMode === 'gym') defaultFieldId = 'gym_full';
     else defaultFieldId = 'main_full';
     if (res) {
@@ -1839,11 +2053,268 @@ document.getElementById('view-day-btn').addEventListener('click', () => {
   refreshCalendar();
 });
 
+// ==========================================================================
+// 13. CLOSURES (LOCKOUTS) CONTROLLER & SIDEBAR
+// ==========================================================================
+function renderSidebarClosures() {
+  const container = document.getElementById('closures-sidebar-list');
+  if (!container) return;
+  container.innerHTML = '';
+
+  const now = new Date();
+  const sortedClosures = [...(state.closures || [])].sort((a, b) => new Date(a.start_time) - new Date(b.start_time));
+
+  const validClosures = sortedClosures.filter(c => new Date(c.end_time) >= now);
+
+  if (validClosures.length === 0) {
+    container.innerHTML = '<div class="empty-closures-text">Žiadne aktívne ani plánované uzávery</div>';
+    return;
+  }
+
+  const isAdmin = state.user && state.user.role === 'admin';
+
+  validClosures.forEach(c => {
+    const sDate = new Date(c.start_time);
+    const eDate = new Date(c.end_time);
+
+    const item = document.createElement('div');
+    item.className = 'closure-item';
+
+    const fieldName = state.fieldsMap[c.field_id] ? state.fieldsMap[c.field_id].name : c.field_id;
+    const formatTime = (d) => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+    const dateFormatted = `${sDate.getDate()}.${sDate.getMonth() + 1}.`;
+
+    item.innerHTML = `
+      <div class="closure-item-header">
+        <span class="closure-reason-tag">⚠️ ${c.reason || 'Uzávera'}</span>
+        ${isAdmin ? `<button type="button" class="closure-delete-btn" title="Odstrániť uzáveru" data-id="${c.id}">&times;</button>` : ''}
+      </div>
+      <div class="closure-item-pitch">${fieldName}</div>
+      <div class="closure-item-time">${dateFormatted} ${formatTime(sDate)} – ${formatTime(eDate)}</div>
+      ${c.note ? `<div class="closure-item-note">${c.note}</div>` : ''}
+    `;
+
+    if (isAdmin) {
+      const delBtn = item.querySelector('.closure-delete-btn');
+      if (delBtn) {
+        delBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          deleteClosure(c.id);
+        });
+      }
+      item.style.cursor = 'pointer';
+      item.addEventListener('click', () => openClosureModal(c));
+    }
+
+    container.appendChild(item);
+  });
+}
+
+function openClosureModal(closureObj = null) {
+  const modal = document.getElementById('closure-modal');
+  const form = document.getElementById('closure-form');
+  const deleteBtn = document.getElementById('delete-closure-btn');
+  const title = document.getElementById('closure-modal-title');
+  if (!modal || !form) return;
+
+  form.reset();
+  populateClosureTimeSelects();
+
+  const pitchSelect = document.getElementById('closure-pitch-select');
+  const subpartGroup = document.getElementById('closure-subpart-group');
+  const partSelect = document.getElementById('closure-part-select');
+  const reasonSelect = document.getElementById('closure-reason');
+  const noteGroup = document.getElementById('closure-note-group');
+  const noteInput = document.getElementById('closure-note');
+
+  function updateSubpartVisibility() {
+    const val = pitchSelect.value;
+    if (val === 'main' || val === 'training') {
+      subpartGroup.classList.remove('hidden');
+    } else {
+      subpartGroup.classList.add('hidden');
+    }
+  }
+
+  function updateReasonVisibility() {
+    if (reasonSelect.value === 'Iné') {
+      noteGroup.classList.remove('hidden');
+      noteInput.required = true;
+    } else {
+      noteGroup.classList.add('hidden');
+      noteInput.required = false;
+    }
+  }
+
+  pitchSelect.onchange = updateSubpartVisibility;
+  reasonSelect.onchange = updateReasonVisibility;
+
+  if (closureObj && closureObj.id) {
+    title.textContent = '⚠️ Upraviť uzáveru plochy';
+    document.getElementById('closure-id').value = closureObj.id;
+    deleteBtn.classList.remove('hidden');
+
+    const fid = closureObj.field_id;
+    if (fid.startsWith('training_')) {
+      pitchSelect.value = 'training';
+      partSelect.value = fid.replace('training_', '');
+    } else if (fid.startsWith('main_')) {
+      pitchSelect.value = 'main';
+      partSelect.value = fid.replace('main_', '');
+    } else if (fid === 'turf_full') {
+      pitchSelect.value = 'turf';
+    } else if (fid === 'turf_park_full') {
+      pitchSelect.value = 'turf_park';
+    } else if (fid === 'gym_full') {
+      pitchSelect.value = 'gym';
+    }
+
+    const sDate = new Date(closureObj.start_time);
+    const eDate = new Date(closureObj.end_time);
+
+    document.getElementById('closure-date').value = formatDateISO(sDate);
+    document.getElementById('closure-start-time').value = formatTimePadding(sDate);
+    document.getElementById('closure-end-time').value = formatTimePadding(eDate);
+    reasonSelect.value = closureObj.reason || 'Údržba';
+    noteInput.value = closureObj.note || '';
+  } else {
+    title.textContent = '⚠️ Nastaviť uzáveru plochy';
+    document.getElementById('closure-id').value = '';
+    deleteBtn.classList.add('hidden');
+
+    if (state.activeFieldMode === 'training') pitchSelect.value = 'training';
+    else if (state.activeFieldMode === 'main') pitchSelect.value = 'main';
+    else if (state.activeFieldMode === 'turf_school' || state.activeFieldMode === 'turf') pitchSelect.value = 'turf';
+    else if (state.activeFieldMode === 'turf_park') pitchSelect.value = 'turf_park';
+    else if (state.activeFieldMode === 'gym') pitchSelect.value = 'gym';
+
+    document.getElementById('closure-date').value = formatDateISO(state.currentDate);
+    document.getElementById('closure-start-time').value = '08:00';
+    document.getElementById('closure-end-time').value = '21:00';
+    reasonSelect.value = 'Údržba';
+    noteInput.value = '';
+  }
+
+  updateSubpartVisibility();
+  updateReasonVisibility();
+  modal.classList.remove('hidden');
+}
+
+function closeClosureModal() {
+  const modal = document.getElementById('closure-modal');
+  if (modal) modal.classList.add('hidden');
+}
+
+function populateClosureTimeSelects() {
+  const startSelect = document.getElementById('closure-start-time');
+  const endSelect = document.getElementById('closure-end-time');
+  if (!startSelect || !endSelect) return;
+
+  startSelect.innerHTML = '';
+  endSelect.innerHTML = '';
+
+  TIME_SLOTS.forEach(time => {
+    const opt = document.createElement('option');
+    opt.value = time;
+    opt.textContent = time;
+    startSelect.appendChild(opt);
+  });
+
+  TIME_SLOTS.forEach(time => {
+    const opt = document.createElement('option');
+    opt.value = time;
+    opt.textContent = time;
+    endSelect.appendChild(opt);
+  });
+  const finalOpt = document.createElement('option');
+  finalOpt.value = `${END_HOUR}:00`;
+  finalOpt.textContent = `${END_HOUR}:00`;
+  endSelect.appendChild(finalOpt);
+}
+
+async function handleClosureSubmit(e) {
+  e.preventDefault();
+  const id = document.getElementById('closure-id').value;
+  const pitchVal = document.getElementById('closure-pitch-select').value;
+  const partVal = document.getElementById('closure-part-select').value;
+  const dateStr = document.getElementById('closure-date').value;
+  const startStr = document.getElementById('closure-start-time').value;
+  const endStr = document.getElementById('closure-end-time').value;
+  const reason = document.getElementById('closure-reason').value;
+  const note = document.getElementById('closure-note').value.trim();
+
+  const startDate = new Date(`${dateStr}T${startStr}:00`);
+  const endDate = new Date(`${dateStr}T${endStr}:00`);
+
+  if (startDate.getTime() >= endDate.getTime()) {
+    showToast('Neplatný čas', 'Koniec uzávery musí byť neskôr ako začiatok.', 'error');
+    return;
+  }
+
+  if (reason === 'Iné' && !note) {
+    showToast('Chýbajúce údaje', 'Pre dôvod "Iné" je povinné zadať poznámku.', 'error');
+    return;
+  }
+
+  let resolvedFieldId;
+  if (pitchVal === 'main') {
+    resolvedFieldId = `main_${partVal}`;
+  } else if (pitchVal === 'training') {
+    resolvedFieldId = `training_${partVal}`;
+  } else if (pitchVal === 'turf') {
+    resolvedFieldId = 'turf_full';
+  } else if (pitchVal === 'turf_park') {
+    resolvedFieldId = 'turf_park_full';
+  } else if (pitchVal === 'gym') {
+    resolvedFieldId = 'gym_full';
+  }
+
+  const payload = {
+    field_id: resolvedFieldId,
+    start_time: startDate.toISOString(),
+    end_time: endDate.toISOString(),
+    reason,
+    note
+  };
+
+  try {
+    if (id) {
+      await apiRequest(`/closures/${id}`, { method: 'DELETE' });
+      await apiRequest('/closures', { method: 'POST', body: payload });
+      showToast('Uzávera upravená', 'Uzávera bola úspešne upravená.');
+    } else {
+      await apiRequest('/closures', { method: 'POST', body: payload });
+      showToast('Uzávera vytvorená', 'Plocha bola úspešne zablokovaná.');
+    }
+
+    closeClosureModal();
+    refreshCalendar();
+  } catch (err) {
+    showToast('Chyba uzávery', err.message, 'error');
+  }
+}
+
+async function deleteClosure(id = null) {
+  const closureId = id || document.getElementById('closure-id').value;
+  if (!closureId) return;
+  if (!confirm('Naozaj chcete zrušiť túto uzáveru plochy?')) return;
+
+  try {
+    await apiRequest(`/closures/${closureId}`, { method: 'DELETE' });
+    showToast('Uzávera zrušená', 'Uzávera plochy bola úspešne odstránená.');
+    closeClosureModal();
+    refreshCalendar();
+  } catch (err) {
+    showToast('Chyba zrušenia', err.message, 'error');
+  }
+}
+
 // Pitch Tab Controls
 const pitchTabs = [
   { id: 'pitch-tab-main', mode: 'main' },
   { id: 'pitch-tab-training', mode: 'training' },
-  { id: 'pitch-tab-turf', mode: 'turf' },
+  { id: 'pitch-tab-turf-school', mode: 'turf_school' },
+  { id: 'pitch-tab-turf-park', mode: 'turf_park' },
   { id: 'pitch-tab-gym', mode: 'gym' }
 ];
 
@@ -1860,6 +2331,22 @@ pitchTabs.forEach(tab => {
     });
   }
 });
+
+// Closure Modal Buttons
+const closureBtn = document.getElementById('closure-btn');
+if (closureBtn) closureBtn.addEventListener('click', () => openClosureModal());
+
+const closeClosureModalBtn = document.getElementById('close-closure-modal-btn');
+if (closeClosureModalBtn) closeClosureModalBtn.addEventListener('click', closeClosureModal);
+
+const cancelClosureBtn = document.getElementById('cancel-closure-btn');
+if (cancelClosureBtn) cancelClosureBtn.addEventListener('click', closeClosureModal);
+
+const closureForm = document.getElementById('closure-form');
+if (closureForm) closureForm.addEventListener('submit', handleClosureSubmit);
+
+const deleteClosureBtn = document.getElementById('delete-closure-btn');
+if (deleteClosureBtn) deleteClosureBtn.addEventListener('click', () => deleteClosure());
 
 // Auth Submit & Reset DB
 document.getElementById('login-form').addEventListener('submit', handleLogin);

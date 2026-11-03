@@ -60,6 +60,7 @@
           </div>
         </div>
         <button id="admin-toggle-btn" class="btn btn-secondary hidden">Správa používateľov</button>
+        <button id="closure-btn" class="btn btn-warning-outline hidden" title="Nastaviť uzáveru ihriska">⚠️ Uzávera</button>
         <button id="logout-btn" class="btn btn-danger-outline">Odhlásiť sa</button>
       </div>
     </header>
@@ -83,8 +84,18 @@
               <span>Farby tímov a trénerov</span>
             </div>
             <div class="legend-item" style="font-size: 0.72rem; line-height: 1.4; opacity: 0.85; margin-top: 4px;">
-              ℹ️ Štvrtiny <strong>A1, A2, B1, B2</strong> platia pre Hlavné a Tréningové ihrisko. <strong>Umelá tráva</strong> a <strong>Telocvičňa</strong> sa rezervujú ako celá plocha.
+              ℹ️ Štvrtiny <strong>A1, A2, B1, B2</strong> platia pre Hlavné a Tréningové ihrisko. <strong>Umelá tráva (škola/park)</strong> a <strong>Telocvičňa</strong> sa rezervujú ako celá plocha.
             </div>
+          </div>
+        </div>
+
+        <!-- Current & Planned Closures Panel -->
+        <div class="panel-card closures-panel mt-4">
+          <div class="card-header closures-panel-header" style="display: flex; justify-content: space-between; align-items: center;">
+            <h3 style="font-size: 0.95rem; font-weight: 700; color: var(--danger);">🔒 Aktuálne a plánované uzávery</h3>
+          </div>
+          <div id="closures-sidebar-list" class="closures-sidebar-list" style="margin-top: 0.75rem;">
+            <p class="text-muted" style="font-size: 0.75rem;">Žiadne plánované uzávery.</p>
           </div>
         </div>
       </aside>
@@ -110,7 +121,8 @@
               <div class="pitch-selector-tabs">
                 <button id="pitch-tab-main" class="tab-btn active" data-pitch="main">Hlavné ihrisko</button>
                 <button id="pitch-tab-training" class="tab-btn" data-pitch="training">Tréningové ihrisko</button>
-                <button id="pitch-tab-turf" class="tab-btn" data-pitch="turf">Umelá tráva</button>
+                <button id="pitch-tab-turf-school" class="tab-btn" data-pitch="turf_school">Umelá tráva - škola</button>
+                <button id="pitch-tab-turf-park" class="tab-btn" data-pitch="turf_park">Umelá tráva - park</button>
                 <button id="pitch-tab-gym" class="tab-btn" data-pitch="gym">Telocvičňa</button>
               </div>
             </div>
@@ -279,7 +291,11 @@
                 </div>
               </div>
             <div class="mini-pitch-card turf-mini" data-field-id="turf_full">
-              <div class="mini-label">Umelá tráva</div>
+              <div class="mini-label">Umelá tráva - škola</div>
+              <div class="mini-single-badge">Celá plocha</div>
+            </div>
+            <div class="mini-pitch-card turf-park-mini" data-field-id="turf_park_full">
+              <div class="mini-label">Umelá tráva - park</div>
               <div class="mini-single-badge">Celá plocha</div>
             </div>
             <div class="mini-pitch-card gym-mini" data-field-id="gym_full">
@@ -396,6 +412,83 @@
         <div class="modal-footer" style="margin-top: 1.5rem; justify-content: flex-end; gap: 0.75rem;">
           <button type="button" id="cancel-edit-user-btn" class="btn btn-secondary">Zrušiť</button>
           <button type="submit" class="btn btn-primary">Uložiť zmeny</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 5. PITCH CLOSURE MODAL (ADMIN ONLY) -->
+  <div id="closure-modal" class="modal-overlay hidden">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 id="closure-modal-title">⚠️ Nastaviť uzáveru plochy</h3>
+        <button id="close-closure-modal-btn" class="btn-close">&times;</button>
+      </div>
+      <form id="closure-form">
+        <input type="hidden" id="closure-id">
+
+        <div class="form-group">
+          <label for="closure-pitch-select">Ihrisko / Plocha</label>
+          <select id="closure-pitch-select" required>
+            <option value="training" selected>Tréningové ihrisko</option>
+            <option value="main">Hlavné ihrisko</option>
+            <option value="turf">Umelá tráva - škola</option>
+            <option value="turf_park">Umelá tráva - park</option>
+            <option value="gym">Telocvičňa</option>
+          </select>
+        </div>
+
+        <div class="form-group" id="closure-subpart-group">
+          <label for="closure-part-select">Rozsah plochy (časť)</label>
+          <select id="closure-part-select">
+            <option value="full" selected>Celé ihrisko</option>
+            <option value="half_a">Polovica A (A1 + A2)</option>
+            <option value="half_b">Polovica B (B1 + B2)</option>
+            <option value="quarter_a1">Štvrtina A1</option>
+            <option value="quarter_a2">Štvrtina A2</option>
+            <option value="quarter_b1">Štvrtina B1</option>
+            <option value="quarter_b2">Štvrtina B2</option>
+          </select>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="closure-date">Dátum</label>
+            <input type="date" id="closure-date" required>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="closure-start-time">Čas od</label>
+            <select id="closure-start-time" required></select>
+          </div>
+          <div class="form-group">
+            <label for="closure-end-time">Čas do</label>
+            <select id="closure-end-time" required></select>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="closure-reason">Dôvod uzávery</label>
+          <select id="closure-reason" required>
+            <option value="Údržba" selected>Údržba</option>
+            <option value="Prázdniny">Prázdniny</option>
+            <option value="Iné">Iné</option>
+          </select>
+        </div>
+
+        <div class="form-group hidden" id="closure-note-group">
+          <label for="closure-note">Poznámka / Doplňujúci popis <span style="color: var(--danger);">*</span></label>
+          <input type="text" id="closure-note" placeholder="Opíšte dôvod uzávery">
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" id="delete-closure-btn" class="btn btn-danger hidden">Zmazať uzáveru</button>
+          <div class="modal-footer-actions">
+            <button type="button" id="cancel-closure-btn" class="btn btn-secondary">Zrušiť</button>
+            <button type="submit" class="btn btn-primary" style="background-color: var(--danger); border-color: var(--danger);">Uložiť uzáveru</button>
+          </div>
         </div>
       </form>
     </div>

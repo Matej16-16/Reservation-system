@@ -98,7 +98,12 @@
     },
     {
       "id": "turf_full",
-      "name": "Umelá tráva",
+      "name": "Umelá tráva - škola",
+      "parent_id": null
+    },
+    {
+      "id": "turf_park_full",
+      "name": "Umelá tráva - park",
       "parent_id": null
     },
     {
@@ -107,5 +112,6 @@
       "parent_id": null
     }
   ],
-  "reservations": []
+  "reservations": [],
+  "closures": []
 }

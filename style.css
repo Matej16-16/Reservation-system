@@ -1066,11 +1066,11 @@ body {
   color: var(--primary-hover);
 }
 
-.training-mini, .main-mini, .turf-mini, .gym-mini {
+.training-mini, .main-mini, .turf-mini, .turf-park-mini, .gym-mini {
   display: flex;
   flex-direction: column;
 }
-.turf-mini, .gym-mini {
+.turf-mini, .turf-park-mini, .gym-mini {
   justify-content: center;
   align-items: center;
   padding: 0.6rem 0.35rem;
@@ -1736,6 +1736,118 @@ body {
   padding: 2px;
   margin-right: 0.5rem;
 }
+
+/* Warning Outline Button */
+.btn-warning-outline {
+  background-color: transparent;
+  color: #f59e0b;
+  border: 1px solid #f59e0b;
+  border-radius: var(--border-radius-sm);
+  padding: 0.4rem 0.85rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+.btn-warning-outline:hover {
+  background-color: rgba(245, 158, 11, 0.15);
+  color: #fbbf24;
+  border-color: #fbbf24;
+}
+
+/* Closures Left Sidebar Styling */
+.closures-sidebar-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.closure-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.5rem 0.65rem;
+  background-color: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  border-left: 3px solid #ef4444;
+  border-radius: var(--border-radius-sm);
+  font-size: 0.72rem;
+  position: relative;
+  transition: background-color var(--transition-fast);
+}
+
+.closure-item:hover {
+  background-color: rgba(239, 68, 68, 0.14);
+}
+
+.closure-item-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-weight: 700;
+  color: #f87171;
+}
+
+.closure-item-time {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+}
+
+.closure-item-reason {
+  font-size: 0.68rem;
+  color: var(--text-main);
+  background-color: rgba(255, 255, 255, 0.05);
+  padding: 2px 5px;
+  border-radius: 3px;
+  display: inline-block;
+  align-self: flex-start;
+  margin-top: 2px;
+}
+
+.closure-delete-btn {
+  background: transparent;
+  border: none;
+  color: #ef4444;
+  font-size: 1.15rem;
+  cursor: pointer;
+  padding: 0 4px;
+  line-height: 1;
+  border-radius: 3px;
+  transition: all var(--transition-fast);
+}
+.closure-delete-btn:hover {
+  color: #ffffff;
+  background-color: #ef4444;
+}
+
+/* Closures Overlay Card in Calendar (Light Red Styling with Striped Pattern) */
+.reservation-card.is-closure {
+  background-color: rgba(239, 68, 68, 0.22) !important;
+  border: 1.5px solid rgba(239, 68, 68, 0.75) !important;
+  background-image: repeating-linear-gradient(
+    -45deg,
+    rgba(239, 68, 68, 0.12),
+    rgba(239, 68, 68, 0.12) 8px,
+    rgba(239, 68, 68, 0.22) 8px,
+    rgba(239, 68, 68, 0.22) 16px
+  ) !important;
+  color: #fecaca !important;
+  z-index: 15;
+}
+
+.reservation-card.is-closure .res-card-header .res-card-coach {
+  color: #f87171 !important;
+  font-weight: 800;
+}
+
+.reservation-card.is-closure:hover {
+  background-color: rgba(239, 68, 68, 0.32) !important;
+  border-color: #ef4444 !important;
+  box-shadow: 0 4px 15px rgba(239, 68, 68, 0.45);
+}
+
 
 
 
